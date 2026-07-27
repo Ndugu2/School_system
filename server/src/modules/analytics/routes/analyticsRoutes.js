@@ -1,11 +1,27 @@
 const express = require('express');
 const router = express.Router();
-const RiskProfile = require('../models/RiskProfile');
+const { protect, authorize } = require('../../../middleware/auth');
 const Student = require('../../../models/Student');
 const Attendance = require('../../../models/Attendance');
 const { QuizAttempt, Submission } = require('../../lms/models');
-const { protect, authorize } = require('../../../middleware/auth');
+const RiskProfile = require('../models/RiskProfile');
 
+// Import risk calculator service
+const riskCalculator = require('../services/riskCalculator');
+
+// Updated route using service
+
+
+// New per-student endpoint
+router.get('/risk-profile/:studentId', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
+  try {
+    const profile = await riskCalculator.getRiskProfile(req.params.studentId);
+    if (!profile) return res.status(404).json({ error: { message: 'Risk profile not found' } });
+    res.json(profile);
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
 // @desc  Calculate risk scores for all students (Admin triggered or Cron)
 // @route POST /api/analytics/calculate-risk
 router.post('/calculate-risk', protect, authorize('super-admin', 'admin'), async (req, res) => {

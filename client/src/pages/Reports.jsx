@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
+import React, { useState, useEffect, useCallback } from 'react';
+import { api, analyticsApi } from '../services/api';
 import {
   FileText, BarChart2, TrendingUp, TrendingDown, Users,
   CreditCard, Calendar, Download, Printer, Filter,
-  ChevronDown, Award, AlertTriangle, CheckCircle
+  ChevronDown, Award, AlertTriangle, CheckCircle, ShieldAlert,
+  RefreshCw, Mail, Loader
 } from 'lucide-react';
+
 
 const TERMS = ['Term I 2026', 'Term II 2026', 'Term III 2025', 'Term II 2025', 'Term I 2025'];
 const CLASSES = ['All Classes', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'S1', 'S2', 'S3', 'S4'];
@@ -14,6 +16,59 @@ export default function Reports() {
   const [selectedTerm, setSelectedTerm] = useState('Term II 2026');
   const [selectedClass, setSelectedClass] = useState('All Classes');
   const [loading, setLoading] = useState(false);
+
+  // ── Early Warning Analytics State ─────────────────────────────────────────
+  const [watchlist, setWatchlist] = useState([]);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [watchlistError, setWatchlistError] = useState(null);
+  const [calculating, setCalculating] = useState(false);
+  const [emailSending, setEmailSending] = useState(null); // holds studentId being emailed
+  const [emailSuccess, setEmailSuccess] = useState(null);
+
+  const fetchWatchlist = useCallback(async () => {
+    setWatchlistLoading(true);
+    setWatchlistError(null);
+    try {
+      const data = await analyticsApi.getWatchlist();
+      setWatchlist(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setWatchlistError(err.message || 'Failed to load watchlist');
+    } finally {
+      setWatchlistLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeReport === 'earlywarning') fetchWatchlist();
+  }, [activeReport, fetchWatchlist]);
+
+  const handleCalculateRisk = async () => {
+    setCalculating(true);
+    try {
+      await analyticsApi.calculateRisk();
+      await fetchWatchlist();
+    } catch (err) {
+      setWatchlistError(err.message);
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  const handleSendEmail = async (studentId) => {
+    setEmailSending(studentId);
+    setEmailSuccess(null);
+    try {
+      await analyticsApi.sendRiskEmail(studentId);
+      setEmailSuccess(studentId);
+      setTimeout(() => setEmailSuccess(null), 3000);
+    } catch (err) {
+      alert('Email failed: ' + err.message);
+    } finally {
+      setEmailSending(null);
+    }
+  };
+
+
 
   // Mock data — would be fetched from API in production
   const overviewData = {
@@ -57,6 +112,7 @@ export default function Reports() {
     { id: 'attendance', label: 'Attendance Report', icon: Calendar },
     { id: 'finance', label: 'Fee Collection', icon: CreditCard },
     { id: 'staff', label: 'Staff Report', icon: Users },
+    { id: 'earlywarning', label: 'Early Warning', icon: ShieldAlert },
   ];
 
   const handlePrint = () => window.print();

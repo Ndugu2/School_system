@@ -1,6 +1,6 @@
 import { queueRequest, syncQueue } from './SyncQueue';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const fetchApi = async (endpoint, options = {}) => {
   const token = localStorage.getItem('token');
@@ -62,3 +62,28 @@ if (typeof window !== 'undefined') {
     syncQueue(api);
   }
 }
+
+// ── Analytics helpers ────────────────────────────────────────────────────────
+export const analyticsApi = {
+  getWatchlist: () => api.get('/analytics/watchlist'),
+  getRiskProfile: (studentId) => api.get(`/analytics/risk-profile/${studentId}`),
+  calculateRisk: () => api.post('/analytics/calculate-risk', {}),
+  sendRiskEmail: (studentId) => api.post('/analytics/send-risk-email', { studentId }),
+};
+
+// ── Auth helpers ─────────────────────────────────────────────────────────────
+export const authApi = {
+  login: (credentials) => api.post('/auth/login', credentials),
+  register: (data) => api.post('/auth/register', data),
+  getMe: () => api.get('/auth/me'),
+};
+
+// ── Students helpers ─────────────────────────────────────────────────────────
+export const studentsApi = {
+  getAll: (params = '') => api.get(`/students${params}`),
+  getOne: (id) => api.get(`/students/${id}`),
+  create: (data) => api.post('/students', data),
+  update: (id, data) => api.put(`/students/${id}`, data),
+  remove: (id) => api.delete(`/students/${id}`),
+};
+

@@ -9,15 +9,26 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
   const { user, logout } = useAuth();
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      setSidebarOpen(!mobile);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'theme-dark');
-    // Using simple toggling:
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
@@ -50,7 +61,14 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
             <GraduationCap size={28} color="#fbbf24" />
             <span style={styles.logoText}>Ndugu portal</span>
           </div>
-          <button style={styles.closeSidebarBtn} onClick={() => setSidebarOpen(false)}>
+          <button
+            style={{
+              ...styles.closeSidebarBtn,
+              display: isMobile ? 'flex' : 'none',
+            }}
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close sidebar"
+          >
             <X size={20} />
           </button>
         </div>
@@ -90,7 +108,11 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
         {/* Topbar */}
         <header style={styles.header}>
           <div style={styles.headerLeft}>
-            <button style={styles.menuToggleBtn} onClick={() => setSidebarOpen(!sidebarOpen)}>
+            <button
+              style={styles.menuToggleBtn}
+              onClick={() => setSidebarOpen(prev => !prev)}
+              aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            >
               <Menu size={22} />
             </button>
             <h2 style={styles.pageTitle}>
