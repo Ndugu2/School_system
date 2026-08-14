@@ -18,21 +18,21 @@ git clone https://github.com/Ndugu2/School_system.git
 cd School_system
 
 # Backend dependencies
-cd server && npm install
+cd backend && npm install
 
 # Frontend dependencies
-cd ../client && npm install
+cd ../frontend && npm install
 ```
 
 ### 2. Environment Setup
-Add `.env` files in `/server` (`MONGODB_URI`, `JWT_SECRET`, `PORT=5000`) and `/client` (`VITE_API_URL=http://localhost:5000/api`).
+Copy `.env.example` to `.env` and set `MONGODB_URI`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `PORT=5000`. The frontend uses `http://localhost:5000/api` by default; set `VITE_API_URL` in `frontend/.env` only when using another API URL.
 
 ### 3. Run Locally
 ```bash
-# Server (from /server)
+# Backend (from /backend)
 npm run dev
 
-# Client (from /client)
+# Frontend (from /frontend)
 npm run dev
 ```
 

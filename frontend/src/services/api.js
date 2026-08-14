@@ -1,0 +1,128 @@
+import { queueRequest, syncQueue } from './SyncQueue';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const REQUEST_TIMEOUT_MS = 15_000;
+
+const refreshAccessToken = async () => {
+  const refreshToken = localStorage.getItem('refreshToken');
+  if (!refreshToken) return false;
+
+  try {
+    const response = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.token) return false;
+    localStorage.setItem('token', data.token);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const fetchApi = async (endpoint, options = {}) => {
+  const token = localStorage.getItem('token');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+    ...options.headers,
+  };
+
+  const config = {
+    ...options,
+    headers,
+  };
+
+  if (options.body && typeof options.body === 'object') {
+    config.body = JSON.stringify(options.body);
+  }
+
+  // Check connectivity
+  if (!navigator.onLine && options.method !== 'GET') {
+    console.log('App is offline. Queuing request for:', endpoint);
+    await queueRequest(endpoint, options.method, options.body);
+    return { offlineQueued: true, message: 'App offline. Action queued for sync.' };
+  }
+
+  try {
+    const request = async () => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        return await fetch(`${API_URL}${endpoint}`, { ...config, signal: controller.signal });
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    };
+
+    let response = await request();
+    if (response.status === 401 && !endpoint.startsWith('/auth/')) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        headers.Authorization = `Bearer ${localStorage.getItem('token')}`;
+        response = await request();
+      }
+    }
+
+    const isJson = response.headers.get('content-type')?.includes('application/json');
+    const data = isJson ? await response.json() : null;
+
+    if (!response.ok) {
+      throw new Error(data?.error?.message || `Request failed (${response.status})`);
+    }
+
+    return data;
+  } catch (err) {
+    // If request failed due to network error and is a mutation, queue it
+    if (options.method !== 'GET' && (err.message.includes('Failed to fetch') || err.name === 'AbortError' || !navigator.onLine)) {
+      console.log('Network failure. Queuing request for:', endpoint);
+      await queueRequest(endpoint, options.method, options.body);
+      return { offlineQueued: true, message: 'Network error. Action queued for sync.' };
+    }
+    throw err;
+  }
+};
+
+export const api = {
+  get: (endpoint, options) => fetchApi(endpoint, { method: 'GET', ...options }),
+  post: (endpoint, body, options) => fetchApi(endpoint, { method: 'POST', body, ...options }),
+  put: (endpoint, body, options) => fetchApi(endpoint, { method: 'PUT', body, ...options }),
+  delete: (endpoint, options) => fetchApi(endpoint, { method: 'DELETE', ...options }),
+};
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    syncQueue(api);
+  });
+  // Also run sync immediately on load if we are online
+  if (navigator.onLine) {
+    syncQueue(api);
+  }
+}
+
+// ── Analytics helpers ────────────────────────────────────────────────────────
+export const analyticsApi = {
+  getWatchlist: () => api.get('/analytics/watchlist'),
+  getRiskProfile: (studentId) => api.get(`/analytics/risk-profile/${studentId}`),
+  calculateRisk: () => api.post('/analytics/calculate-risk', {}),
+  sendRiskEmail: (studentId) => api.post('/analytics/send-risk-email', { studentId }),
+};
+
+// ── Auth helpers ─────────────────────────────────────────────────────────────
+export const authApi = {
+  login: (credentials) => api.post('/auth/login', credentials),
+  register: (data) => api.post('/auth/register', data),
+  getMe: () => api.get('/auth/me'),
+};
+
+// ── Students helpers ─────────────────────────────────────────────────────────
+export const studentsApi = {
+  getAll: (params = '') => api.get(`/students${params}`),
+  getOne: (id) => api.get(`/students/${id}`),
+  create: (data) => api.post('/students', data),
+  update: (id, data) => api.put(`/students/${id}`, data),
+  remove: (id) => api.delete(`/students/${id}`),
+};
+

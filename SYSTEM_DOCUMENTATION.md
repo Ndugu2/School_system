@@ -15,20 +15,20 @@
 
 ### Tech Stack
 * **Frontend**: React (Vite), Lucide Icons, Custom Design Tokens & CSS Variables, Outfit Typography, Responsive PWA architecture.
-* **Backend**: Node.js, Express.js (Modular Monolith Architecture under `/server/src/modules/`).
+* **Backend**: Node.js, Express.js (Modular Monolith Architecture under `/backend/src/modules/`).
 * **Database**: MongoDB with Mongoose ORM schemas.
 * **Document Processing**: PDFKit for server-side generation of printable report cards and ID cards.
 * **Authentication**: JSON Web Tokens (JWT) with password hashing via bcrypt.
 
 ```
 SchoolSystemUganda/
-├── client/                     # React Vite Frontend Application
+├── frontend/                   # React Vite Frontend Application
 │   ├── src/
 │   │   ├── components/         # Layout, Navigation & Reusable Components
 │   │   ├── context/            # AuthContext, ThemeContext
 │   │   ├── pages/              # Module Page Views (Finance, HR, LMS, Admissions...)
 │   │   └── services/           # Axios API Service & SyncQueue
-└── server/                     # Express Backend Server
+└── backend/                    # Express Backend Server
     └── src/
         ├── models/             # Shared Mongoose Schemas (Student, Class, Grade, Fee...)
         ├── routes/             # Primary REST API Routes
@@ -157,34 +157,36 @@ git clone https://github.com/Ndugu2/School_system.git
 cd School_system
 
 # Install backend dependencies
-cd server
+cd backend
 npm install
 
 # Install frontend dependencies
-cd ../client
+cd ../frontend
 npm install
 ```
 
 ### 2. Environment Configuration
-Create a `.env` file in `/server`:
+Copy `.env.example` to a root `.env` file:
 ```env
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/school_system_uganda
-JWT_SECRET=your_jwt_secret_key_here
+JWT_SECRET=your_long_random_access_token_secret
+JWT_REFRESH_SECRET=your_different_long_random_refresh_token_secret
+CORS_ORIGIN=http://localhost:5173,http://localhost:4173
 NODE_ENV=development
 ```
 
-Create a `.env` file in `/client`:
+Optionally create a `.env` file in `/frontend` when the API is hosted elsewhere:
 ```env
 VITE_API_URL=http://localhost:5000/api
 ```
 
 ### 3. Running Locally
 ```bash
-# Start backend server (from /server)
+# Start backend server (from /backend)
 npm run start
 
-# Start frontend application (from /client)
+# Start frontend application (from /frontend)
 npm run dev
 ```
 
