@@ -23,7 +23,7 @@ export const api = {
       return await response.json();
     } catch (err) {
       console.warn(`[Mobile API Fallback] ${endpoint}:`, err);
-      return { success: true, simulated: true };
+      throw err;
     }
   }
 };

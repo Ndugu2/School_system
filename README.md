@@ -45,10 +45,11 @@ npm run install:all
 - In `/backend/.env`:
   ```env
   PORT=5000
-  MONGODB_URI=mongodb://localhost:27017/uganda-school-system
+  MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/school_system_uganda?retryWrites=true&w=majority
   JWT_SECRET=your_jwt_secret
   JWT_REFRESH_SECRET=your_refresh_secret
   ```
+  Create the Atlas database user and allow your development IP in MongoDB Atlas before starting the backend. URL-encode special characters in the database username or password.
 - In `/web/.env`:
   ```env
   VITE_API_URL=http://localhost:5000/api

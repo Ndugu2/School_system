@@ -31,6 +31,13 @@ const fetchApi = async (endpoint, options = {}) => {
     const data = await response.json();
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        if (window.location.pathname !== '/login') {
+          window.location.assign('/login');
+        }
+      }
       throw new Error(data.error?.message || 'Something went wrong');
     }
 

@@ -30,7 +30,7 @@ router.get('/assets', protect, async (req, res) => {
 });
 
 // @route POST /api/inventory/assets
-router.post('/assets', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.post('/assets', protect, authorize('super-admin', 'admin', 'inventory-manager'), async (req, res) => {
   try {
     const asset = await Asset.create({ ...req.body, addedBy: req.user._id });
     res.status(201).json(asset);
@@ -40,7 +40,7 @@ router.post('/assets', protect, authorize('super-admin', 'admin'), async (req, r
 });
 
 // @route PUT /api/inventory/assets/:id
-router.put('/assets/:id', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.put('/assets/:id', protect, authorize('super-admin', 'admin', 'inventory-manager'), async (req, res) => {
   try {
     const asset = await Asset.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!asset) return res.status(404).json({ error: { message: 'Asset not found' } });
@@ -51,7 +51,7 @@ router.put('/assets/:id', protect, authorize('super-admin', 'admin'), async (req
 });
 
 // @route POST /api/inventory/assets/:id/checkout
-router.post('/assets/:id/checkout', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
+router.post('/assets/:id/checkout', protect, authorize('super-admin', 'admin', 'teacher', 'inventory-manager'), async (req, res) => {
   const { borrowerId, borrowerType, borrowerName, dueDate, notes } = req.body;
   try {
     const asset = await Asset.findById(req.params.id);
@@ -82,7 +82,7 @@ router.post('/assets/:id/checkout', protect, authorize('super-admin', 'admin', '
 });
 
 // @route POST /api/inventory/assets/:id/checkin
-router.post('/assets/:id/checkin', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
+router.post('/assets/:id/checkin', protect, authorize('super-admin', 'admin', 'teacher', 'inventory-manager'), async (req, res) => {
   const { returnCondition, notes } = req.body;
   try {
     const asset = await Asset.findById(req.params.id);
@@ -115,7 +115,7 @@ router.post('/assets/:id/checkin', protect, authorize('super-admin', 'admin', 't
 });
 
 // @route GET /api/inventory/assets/overdue
-router.get('/assets/overdue', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.get('/assets/overdue', protect, authorize('super-admin', 'admin', 'inventory-manager'), async (req, res) => {
   try {
     const overdueCheckouts = await CheckoutRecord.find({
       itemType: 'asset',
@@ -129,7 +129,7 @@ router.get('/assets/overdue', protect, authorize('super-admin', 'admin'), async 
 });
 
 // @route GET /api/inventory/assets/replacement-forecast
-router.get('/assets/replacement-forecast', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.get('/assets/replacement-forecast', protect, authorize('super-admin', 'admin', 'inventory-manager'), async (req, res) => {
   try {
     const assets = await Asset.find({ isActive: true, purchaseDate: { $exists: true } });
     const now = new Date();
@@ -178,7 +178,7 @@ router.get('/consumables', protect, async (req, res) => {
 });
 
 // @route POST /api/inventory/consumables
-router.post('/consumables', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.post('/consumables', protect, authorize('super-admin', 'admin', 'inventory-manager'), async (req, res) => {
   try {
     const consumable = await Consumable.create({ ...req.body, addedBy: req.user._id });
     res.status(201).json(consumable);
@@ -188,7 +188,7 @@ router.post('/consumables', protect, authorize('super-admin', 'admin'), async (r
 });
 
 // @route PUT /api/inventory/consumables/:id/restock
-router.put('/consumables/:id/restock', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.put('/consumables/:id/restock', protect, authorize('super-admin', 'admin', 'inventory-manager'), async (req, res) => {
   const { quantity, unitCost, supplier } = req.body;
   try {
     const consumable = await Consumable.findById(req.params.id);
@@ -223,7 +223,7 @@ router.put('/consumables/:id/use', protect, async (req, res) => {
 });
 
 // @route GET /api/inventory/consumables/low-stock
-router.get('/consumables/low-stock', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.get('/consumables/low-stock', protect, authorize('super-admin', 'admin', 'inventory-manager'), async (req, res) => {
   try {
     const lowStock = await Consumable.find({
       isActive: true,
@@ -240,7 +240,7 @@ router.get('/consumables/low-stock', protect, authorize('super-admin', 'admin'),
 // ═══════════════════════════════════════════════════════════════════════════
 
 // @route GET /api/inventory/checkouts
-router.get('/checkouts', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
+router.get('/checkouts', protect, authorize('super-admin', 'admin', 'teacher', 'inventory-manager'), async (req, res) => {
   try {
     const { status, borrowerType, borrowerId } = req.query;
     const query = {};
@@ -255,7 +255,7 @@ router.get('/checkouts', protect, authorize('super-admin', 'admin', 'teacher'), 
 });
 
 // @route GET /api/inventory/summary
-router.get('/summary', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.get('/summary', protect, authorize('super-admin', 'admin', 'inventory-manager'), async (req, res) => {
   try {
     const [totalAssets, checkedOutAssets, totalConsumables, lowStockItems, overdueCheckouts] = await Promise.all([
       Asset.countDocuments({ isActive: true }),

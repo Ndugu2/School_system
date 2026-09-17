@@ -20,7 +20,7 @@ const generateAppNumber = async () => {
 // ENQUIRIES
 // ═══════════════════════════════════════════════════════════════════════════
 
-router.get('/enquiries', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.get('/enquiries', protect, authorize('super-admin', 'admin', 'registrar'), async (req, res) => {
   try {
     const { status } = req.query;
     const query = {};
@@ -32,7 +32,7 @@ router.get('/enquiries', protect, authorize('super-admin', 'admin'), async (req,
   }
 });
 
-router.post('/enquiries', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.post('/enquiries', protect, authorize('super-admin', 'admin', 'registrar'), async (req, res) => {
   try {
     const enquiry = await Enquiry.create({ ...req.body, loggedBy: req.user._id });
     res.status(201).json(enquiry);
@@ -41,7 +41,7 @@ router.post('/enquiries', protect, authorize('super-admin', 'admin'), async (req
   }
 });
 
-router.put('/enquiries/:id', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.put('/enquiries/:id', protect, authorize('super-admin', 'admin', 'registrar'), async (req, res) => {
   try {
     const enquiry = await Enquiry.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!enquiry) return res.status(404).json({ error: { message: 'Enquiry not found' } });
@@ -52,7 +52,7 @@ router.put('/enquiries/:id', protect, authorize('super-admin', 'admin'), async (
 });
 
 // Convert enquiry → application
-router.post('/enquiries/:id/convert', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.post('/enquiries/:id/convert', protect, authorize('super-admin', 'admin', 'registrar'), async (req, res) => {
   try {
     const enquiry = await Enquiry.findById(req.params.id);
     if (!enquiry) return res.status(404).json({ error: { message: 'Enquiry not found' } });
@@ -89,7 +89,7 @@ router.post('/enquiries/:id/convert', protect, authorize('super-admin', 'admin')
 // APPLICATIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-router.get('/applications', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.get('/applications', protect, authorize('super-admin', 'admin', 'registrar'), async (req, res) => {
   try {
     const { status, applyingForYear, applyingForClass } = req.query;
     const query = {};
@@ -106,7 +106,7 @@ router.get('/applications', protect, authorize('super-admin', 'admin'), async (r
   }
 });
 
-router.post('/applications', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.post('/applications', protect, authorize('super-admin', 'admin', 'registrar'), async (req, res) => {
   try {
     const applicationNumber = await generateAppNumber();
     const application = await Application.create({
@@ -122,7 +122,7 @@ router.post('/applications', protect, authorize('super-admin', 'admin'), async (
 });
 
 // PUT /api/admissions/applications/:id/status — move pipeline stage
-router.put('/applications/:id/status', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.put('/applications/:id/status', protect, authorize('super-admin', 'admin', 'registrar'), async (req, res) => {
   const { status, decisionNotes, interviewDate, rejectionReason, interviewNotes } = req.body;
   try {
     const update = {

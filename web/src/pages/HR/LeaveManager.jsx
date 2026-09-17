@@ -19,7 +19,7 @@ export default function LeaveManager() {
   const [form, setForm] = useState({ staffName: '', role: 'Teacher', leaveType: 'Sick Leave', startDate: '', endDate: '', reason: '' });
 
   useEffect(() => {
-    api.get('/hr/leaves').then(data => setLeaves(data?.length ? data : MOCK_LEAVES)).catch(() => setLeaves(MOCK_LEAVES)).finally(() => setLoading(false));
+    api.get('/hr/leave').then(data => setLeaves(data?.length ? data : MOCK_LEAVES)).catch(() => setLeaves(MOCK_LEAVES)).finally(() => setLoading(false));
   }, []);
 
   const handleStatusChange = (id, newStatus) => {

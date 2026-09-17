@@ -68,7 +68,7 @@ router.post('/', protect, authorize('admin', 'super-admin', 'teacher'), async (r
 // @route   GET /api/attendance
 // @desc    Get attendance reports/records (filter by class, student, date)
 // @access  Private
-router.get('/', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher'), async (req, res) => {
+router.get('/', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
   const { classId, studentId, date, term } = req.query;
   const filter = {};
 

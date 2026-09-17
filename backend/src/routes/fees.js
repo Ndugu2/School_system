@@ -368,6 +368,20 @@ router.get('/payment-plans/:studentId/:term', protect, async (req, res) => {
   const academicYear = req.query.academicYear || new Date().getFullYear();
 
   try {
+    const administrativeRoles = ['super-admin', 'admin', 'headteacher', 'bursar'];
+    if (!administrativeRoles.includes(req.user.role)) {
+      const student = await Student.findById(studentId).select('user parentUser parentEmail');
+      const isStudentOwner = req.user.role === 'student' && String(student?.user) === String(req.user._id);
+      const isParentOwner = req.user.role === 'parent' && (
+        String(student?.parentUser) === String(req.user._id) ||
+        student?.parentEmail === req.user.email
+      );
+
+      if (!isStudentOwner && !isParentOwner) {
+        return res.status(403).json({ error: { message: 'You are not authorized to view this payment plan' } });
+      }
+    }
+
     const plan = await PaymentPlan.findOne({
       student: studentId,
       term,

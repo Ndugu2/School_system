@@ -39,17 +39,26 @@ backend/
 npm install
 ```
 
-### 2. Environment Configuration
+### 2. MongoDB Atlas Setup
+1. Create a cluster in [MongoDB Atlas](https://www.mongodb.com/atlas).
+2. Create a database user under **Database Access**.
+3. Add your development IP under **Network Access**.
+4. Select **Connect > Drivers**, copy the Node.js connection string, and replace `<username>`, `<password>`, and `<cluster>`.
+5. URL-encode special characters in the database username or password.
+
+### 3. Environment Configuration
 Create `.env` in the `backend/` directory:
 ```env
 PORT=5000
-MONGODB_URI=mongodb://localhost:27017/school_system_uganda
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/school_system_uganda?retryWrites=true&w=majority
 JWT_SECRET=your_jwt_secret_key_here
 JWT_REFRESH_SECRET=your_jwt_refresh_secret
 NODE_ENV=development
 ```
 
-### 3. Start the Server
+The actual `.env` file is ignored by Git. Never commit the Atlas connection string or database password.
+
+### 4. Start the Server
 ```bash
 # Development mode with hot-reload (nodemon)
 npm run dev

@@ -7,6 +7,12 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const mongoUri = process.env.MONGODB_URI;
+
+if (!mongoUri) {
+  console.error('❌ MONGODB_URI is missing. Add your MongoDB Atlas connection string to backend/.env.');
+  process.exit(1);
+}
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
@@ -42,9 +48,18 @@ app.use((req, res, next) => {
 });
 
 // ── Database ─────────────────────────────────────────────────────────────────
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ MongoDB connected successfully.'))
-  .catch((err) => console.error('❌ MongoDB connection error:', err));
+const startServer = async () => {
+  try {
+    await mongoose.connect(mongoUri);
+    console.log('✅ MongoDB connected successfully.');
+    app.listen(PORT, () => {
+      console.log(`🚀 Ndugu Academy Server running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err.message);
+    process.exit(1);
+  }
+};
 
 // ── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
@@ -164,6 +179,4 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: { message: err.message || 'Internal Server Error' } });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Ndugu Academy Server running on port ${PORT}`);
-});
+startServer();
