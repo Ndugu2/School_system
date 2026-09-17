@@ -1,10 +1,13 @@
 {
   "name": "school-system-uganda",
   "version": "1.0.0",
-  "description": "School System Uganda root workspace",
+  "description": "School Management System root workspace",
   "scripts": {
-    "start": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-    "install:all": "npm install && npm install --prefix server && npm install --prefix client"
+    "start": "node scripts/start-dev.js",
+    "start:backend": "npm run dev --prefix backend",
+    "start:web": "npm --prefix web run dev",
+    "start:mobile": "npm run start --prefix mobile",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix web && npm install --prefix mobile"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

@@ -1,0 +1,10 @@
+{
+  "theme": {
+    "primary": "#6366f1",
+    "secondary": "#fbbf24",
+    "background": "#0b0f19",
+    "card": "#1e1b4b",
+    "text": "#ffffff"
+  },
+  "roles": ["teacher", "supervisor", "parent", "student"]
+}
