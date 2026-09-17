@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { GraduationCap, Mail, Lock, User, Eye, EyeOff, Loader } from 'lucide-react';
+import './Login.css';
 
 export default function Login() {
   const { login, demoLogin, register } = useAuth();
@@ -61,10 +62,10 @@ export default function Login() {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.grid}>
+    <div className="login-page" style={styles.container}>
+      <div className="login-shell" style={styles.grid}>
         {/* Brand/Hero Section */}
-        <div style={styles.heroSection}>
+        <div className="login-hero" style={styles.heroSection}>
           <div style={styles.heroOverlay} />
           <div style={styles.heroContent}>
             <div style={styles.logoBadge}>
@@ -90,7 +91,7 @@ export default function Login() {
         </div>
 
         {/* Form Section */}
-        <div style={styles.formSection}>
+        <div className="login-form-section" style={styles.formSection}>
           <div style={styles.formCard}>
             <div style={styles.formHeader}>
               <h2 style={styles.formTitle}>
@@ -209,7 +210,10 @@ export default function Login() {
 
             {!isRegister && (
               <div style={styles.demoSection}>
-                <div style={styles.demoHeader}>Choose a demo role</div>
+                <div style={styles.demoHeader}>
+                  <span>Explore a demo workspace</span>
+                  <small className="demo-helper">Use sample access to preview each portal</small>
+                </div>
                 <div style={styles.demoGrid}>
                   {demoRoles.map((role) => (
                     <button
@@ -217,6 +221,7 @@ export default function Login() {
                       type="button"
                       onClick={() => handleDemoLogin(role.value)}
                       disabled={loading}
+                      className="demo-role-button"
                       style={styles.demoButton}
                     >
                       {role.label}
@@ -240,6 +245,7 @@ const styles = {
     justifyContent: 'center',
     background: 'var(--bg-primary)',
     padding: '24px',
+    background: 'radial-gradient(circle at 12% 8%, rgba(99, 34, 229, 0.08), transparent 30%), var(--bg-primary)',
   },
   grid: {
     display: 'grid',
@@ -325,7 +331,7 @@ const styles = {
     maxWidth: '420px',
   },
   formHeader: {
-    marginBottom: '32px',
+    marginBottom: '28px',
   },
   formTitle: {
     fontSize: '28px',
@@ -444,5 +450,37 @@ const styles = {
     ':hover': {
       textDecoration: 'underline',
     }
+  },
+  demoSection: {
+    marginTop: '24px',
+    paddingTop: '20px',
+    borderTop: '1px solid var(--border)',
+  },
+  demoHeader: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+    marginBottom: '12px',
+    color: 'var(--text-primary)',
+    fontSize: '14px',
+    fontWeight: '700',
+  },
+  demoGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '8px',
+  },
+  demoButton: {
+    minHeight: '42px',
+    padding: '9px 10px',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-sm)',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '600',
+    textAlign: 'left',
+    transition: 'var(--transition)',
   }
 };
