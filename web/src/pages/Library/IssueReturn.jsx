@@ -18,7 +18,7 @@ export default function IssueReturn() {
   const [form, setForm] = useState({ studentName: '', admissionNo: '', className: 'Senior 3', stream: 'East', bookTitle: '', dueDate: '' });
 
   useEffect(() => {
-    api.get('/library/loans').then(data => setLoans(data?.length ? data : MOCK_LOANS)).catch(() => setLoans(MOCK_LOANS)).finally(() => setLoading(false));
+    api.get('/library/loans').then(data => setLoans(data?.loans?.length ? data.loans : MOCK_LOANS)).catch(() => setLoans(MOCK_LOANS)).finally(() => setLoading(false));
   }, []);
 
   const handleReturn = (id) => {

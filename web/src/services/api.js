@@ -57,6 +57,7 @@ export const api = {
   get: (endpoint, options) => fetchApi(endpoint, { method: 'GET', ...options }),
   post: (endpoint, body, options) => fetchApi(endpoint, { method: 'POST', body, ...options }),
   put: (endpoint, body, options) => fetchApi(endpoint, { method: 'PUT', body, ...options }),
+  patch: (endpoint, body, options) => fetchApi(endpoint, { method: 'PATCH', body, ...options }),
   delete: (endpoint, options) => fetchApi(endpoint, { method: 'DELETE', ...options }),
 };
 

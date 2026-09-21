@@ -3,6 +3,7 @@ const router = express.Router();
 const Dormitory = require('../models/Dormitory');
 const HostelRoom = require('../models/HostelRoom');
 const BoarderAssignment = require('../models/BoarderAssignment');
+const ExeatPass = require('../models/ExeatPass');
 const { protect, authorize } = require('../../../middleware/auth');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -154,6 +155,45 @@ router.put('/boarders/:id', protect, authorize('super-admin', 'admin'), async (r
       await HostelRoom.findByIdAndUpdate(assignment.room, { $inc: { currentOccupancy: -1 } });
     }
     res.json(assignment);
+  } catch (err) {
+    res.status(400).json({ error: { message: err.message } });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXEAT PASSES
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.get('/exeats', protect, authorize('super-admin', 'admin', 'supervisor', 'deputy-head', 'teacher'), async (req, res) => {
+  try {
+    const exeats = await ExeatPass.find().sort({ createdAt: -1 });
+    res.json(exeats);
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
+router.post('/exeats', protect, authorize('super-admin', 'admin', 'supervisor', 'deputy-head', 'teacher'), async (req, res) => {
+  try {
+    const otp = String(Math.floor(1000 + Math.random() * 9000));
+    const exeat = await ExeatPass.create({
+      ...req.body,
+      otp,
+      status: req.body.status || 'approved',
+      wardenApproved: req.body.wardenApproved ?? true,
+      createdBy: req.user._id,
+    });
+    res.status(201).json(exeat);
+  } catch (err) {
+    res.status(400).json({ error: { message: err.message } });
+  }
+});
+
+router.put('/exeats/:id', protect, authorize('super-admin', 'admin', 'supervisor', 'deputy-head', 'teacher'), async (req, res) => {
+  try {
+    const exeat = await ExeatPass.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    if (!exeat) return res.status(404).json({ error: { message: 'Exeat pass not found' } });
+    res.json(exeat);
   } catch (err) {
     res.status(400).json({ error: { message: err.message } });
   }

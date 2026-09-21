@@ -1,7 +1,7 @@
 const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
 
-const isSchoolManager = (role) => ['super-admin', 'admin', 'headteacher', 'supervisor', 'deputy-head', 'director-of-studies', 'academic-admin', 'registrar'].includes(role);
+const isSchoolManager = (role) => ['super-admin', 'admin', 'headteacher', 'hod', 'supervisor', 'deputy-head', 'director-of-studies', 'academic-admin', 'registrar'].includes(role);
 
 const teacherAssignments = async (userId) => {
   const teacher = await Teacher.findOne({ user: userId }).select('classes subjects');

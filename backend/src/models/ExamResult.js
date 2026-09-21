@@ -112,7 +112,7 @@ const examResultSchema = new mongoose.Schema({
   // ── Approval Workflow ─────────────────────────────────────────────────────────
   approvalStatus: {
     type: String,
-    enum: ['draft', 'hod-approved', 'admin-approved', 'published'],
+    enum: ['draft', 'submitted', 'hod-approved', 'admin-approved', 'published'],
     default: 'draft'
   },
 

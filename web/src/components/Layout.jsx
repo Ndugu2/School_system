@@ -16,6 +16,7 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
     bursar: 'FINANCE MANAGER',
     headteacher: 'HEADTEACHER',
     'director-of-studies': 'DIRECTOR OF STUDIES',
+    hod: 'HEAD OF DEPARTMENT',
     teacher: 'TEACHER',
     student: 'STUDENT',
     parent: 'PARENT',
@@ -63,6 +64,7 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
     { id: 'messages', label: 'School Messages', icon: MessageCircle },
     { id: 'lms', label: 'Holiday E-Learning', icon: BookOpen },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart2 },
+    { id: 'analytics', label: 'Student Risk', icon: BarChart2 },
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'notifications', label: 'Notifications', icon: Bell },
   ];

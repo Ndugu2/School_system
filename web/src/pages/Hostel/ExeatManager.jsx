@@ -21,22 +21,25 @@ export default function ExeatManager() {
     api.get('/hostel/exeats').then(data => setExeats(data?.length ? data : MOCK_EXEATS)).catch(() => setExeats(MOCK_EXEATS)).finally(() => setLoading(false));
   }, []);
 
-  const handleAction = (id, newStatus, extra = {}) => {
-    setExeats(prev => prev.map(e => e._id === id ? { ...e, status: newStatus, ...extra } : e));
+  const handleAction = async (id, newStatus, extra = {}) => {
+    try {
+      const updated = await api.put(`/hostel/exeats/${id}`, { status: newStatus, ...extra });
+      setExeats(prev => prev.map(e => e._id === id ? updated : e));
+    } catch (error) {
+      setExeats(prev => prev.map(e => e._id === id ? { ...e, status: newStatus, ...extra } : e));
+    }
   };
 
-  const handleCreate = (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault();
     if (!form.studentName || !form.destination || !form.parentName) return;
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    const newExeat = {
-      _id: Date.now().toString(),
-      ...form,
-      otp,
-      status: 'approved',
-      wardenApproved: true
-    };
-    setExeats(prev => [newExeat, ...prev]);
+    try {
+      const newExeat = await api.post('/hostel/exeats', { ...form, otp, status: 'approved', wardenApproved: true });
+      setExeats(prev => [newExeat, ...prev]);
+    } catch (error) {
+      setExeats(prev => [{ _id: Date.now().toString(), ...form, otp, status: 'approved', wardenApproved: true }, ...prev]);
+    }
     setShowModal(false);
     setForm({ studentName: '', admissionNo: '', dormName: 'Lumumba Hall', roomNo: '', destination: '', parentName: '', departureTime: '', returnTime: '' });
   };

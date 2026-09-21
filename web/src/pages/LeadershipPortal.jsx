@@ -8,6 +8,7 @@ const makeStat = (label, value, icon, color, note) => ({ label, value, icon, col
 export default function LeadershipPortal({ type, setCurrentTab }) {
   const { user } = useAuth();
   const isHeadteacher = type === 'headteacher';
+  const isHod = type === 'hod';
   const [data, setData] = useState({ students: 0, teachers: 0, attendance: null, results: [], fees: null, overdue: [] });
 
   useEffect(() => {
@@ -18,7 +19,7 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
       api.get('/attendance/analytics?term=Term 1'),
       api.get(`/exam-results?term=Term 1&academicYear=${year}&limit=100`),
       isHeadteacher ? api.get(`/fees/reports/class-summary?term=Term 1&academicYear=${year}`) : Promise.resolve(null),
-      isHeadteacher ? api.get('/teachers') : Promise.resolve([]),
+      api.get('/teachers'),
       isHeadteacher ? api.get(`/fees/reports/overdue-students?term=Term 1&academicYear=${year}`) : Promise.resolve([]),
     ]).then(([students, attendance, results, fees, teachers, overdue]) => {
       if (!mounted) return;
@@ -34,7 +35,7 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
     return () => { mounted = false; };
   }, [isHeadteacher]);
 
-  const drafts = data.results.filter((item) => item.approvalStatus === 'draft').length;
+  const drafts = data.results.filter((item) => ['draft', 'submitted', 'hod-approved'].includes(item.approvalStatus)).length;
   const published = data.results.filter((item) => item.approvalStatus === 'published').length;
   const attendanceRate = data.attendance?.weekly?.rate ?? 0;
 
@@ -46,9 +47,9 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
         makeStat('Teaching staff', data.teachers, UserRoundCheck, '#7c3aed', 'Active teacher profiles')
       ]
     : [
-        makeStat('Learners tracked', data.students, Users, '#2563eb', 'Across school academics'),
-        makeStat('Weekly attendance', `${attendanceRate}%`, CalendarCheck2, '#0f9f79', 'Whole-school rate'),
-        makeStat('Results awaiting review', drafts, ClipboardCheck, '#d97706', 'Draft assessment entries'),
+        makeStat(isHod ? 'Learners in department' : 'Learners tracked', data.students, Users, '#2563eb', isHod ? 'Academic oversight' : 'Across school academics'),
+        makeStat('Weekly attendance', `${attendanceRate}%`, CalendarCheck2, '#0f9f79', 'Current academic term'),
+        makeStat(isHod ? 'Results for review' : 'Results awaiting review', drafts, ClipboardCheck, '#d97706', isHod ? 'Submitted or draft assessments' : 'Draft assessment entries'),
         makeStat('Published results', published, GraduationCap, '#7c3aed', 'Available to families')
       ];
 
@@ -62,8 +63,8 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
     : [
         ['Review assessment', 'Approve and publish results', 'grades', ClipboardCheck],
         ['Attendance trends', 'Identify learners needing support', 'attendance', CalendarCheck2],
-        ['Classes & subjects', 'Review academic allocation', 'classes', BookOpen],
-        ['Teacher coverage', 'Check subject assignment and workload', 'teachers', UserRoundCheck],
+      [isHod ? 'Department classes' : 'Classes & subjects', 'Review academic allocation', 'classes', BookOpen],
+      [isHod ? 'Teacher performance' : 'Teacher coverage', 'Check subject assignment and workload', 'teachers', UserRoundCheck],
       ];
 
   return (
@@ -71,9 +72,9 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
       <section style={s.hero}>
         <div>
           <p style={s.eyebrow}>Leadership workspace</p>
-          <h1 style={s.title}>{isHeadteacher ? 'Headteacher Portal' : 'Director of Studies Portal'}</h1>
+            <h1 style={s.title}>{isHeadteacher ? 'Headteacher Portal' : isHod ? 'HOD Portal' : 'Director of Studies Portal'}</h1>
           <p style={s.subtitle}>
-            Good day, {user?.name || 'Leader'}. {isHeadteacher ? 'See school health, priorities, and decisions that need your attention.' : 'Oversee academic quality, assessment progress, and learning outcomes.'}
+            Good day, {user?.name || 'Leader'}. {isHeadteacher ? 'See school health, priorities, and decisions that need your attention.' : isHod ? 'Coordinate your department, review assessment quality, and support teachers.' : 'Oversee academic quality, assessment progress, and learning outcomes.'}
           </p>
         </div>
         <div style={s.date}>{new Date().toLocaleDateString('en-UG', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
@@ -108,8 +109,8 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
         </article>
 
         <article style={s.panel}>
-          <p style={s.eyebrow}>Academic snapshot</p>
-          <h2 style={s.heading}>Assessment readiness</h2>
+            <p style={s.eyebrow}>Academic snapshot</p>
+            <h2 style={s.heading}>{isHod ? 'Department readiness' : 'Assessment readiness'}</h2>
           <div style={s.metrics}>
             <span>Published results <strong>{published}</strong></span>
             <span>Draft results requiring review <strong>{drafts}</strong></span>
@@ -140,7 +141,7 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
             <p style={s.eyebrow}>Decision desk</p>
             <h2 style={s.heading}>Curriculum oversight</h2>
             <div style={s.decisions}>
-              <Decision icon={ShieldCheck} title="Review academic results" note="Publish only verified reports" tab="grades" go={setCurrentTab} />
+              <Decision icon={ShieldCheck} title="Review academic results" note="Approve verified department marks" tab="grades" go={setCurrentTab} />
               <Decision icon={BookOpen} title="Monitor subject allocation" note="Check teaching loads and coverage" tab="classes" go={setCurrentTab} />
               <Decision icon={Users} title="Communicate with families" note="Open parent and staff messages" tab="messages" go={setCurrentTab} />
             </div>

@@ -3,10 +3,13 @@ const Grade = require('../models/Grade');
 const Student = require('../models/Student');
 const Subject = require('../models/Subject');
 const Teacher = require('../models/Teacher');
+const ExamResult = require('../models/ExamResult');
 const { teacherAssignments, canAccessStudent } = require('../middleware/recordAccess');
 const { protect, authorize } = require('../middleware/auth');
 const router = express.Router();
 const PDFDocument = require('pdfkit');
+const QRCode = require('qrcode');
+const crypto = require('crypto');
 
 // Helper to determine Uganda grade value based on marks
 const calculateUgGrade = (marks) => {
@@ -19,6 +22,22 @@ const calculateUgGrade = (marks) => {
   if (marks >= 45) return 'P7';
   if (marks >= 40) return 'P8';
   return 'F9';
+};
+
+const reportCardToken = (studentId, term, academicYear) => {
+  const payload = Buffer.from(JSON.stringify({ studentId, term, academicYear })).toString('base64url');
+  const secret = process.env.JWT_SECRET || 'development-report-card-secret';
+  const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+};
+
+const readReportCardToken = (token) => {
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return null;
+  const secret = process.env.JWT_SECRET || 'development-report-card-secret';
+  const expected = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  try { return JSON.parse(Buffer.from(payload, 'base64url').toString()); } catch { return null; }
 };
 
 // @route   POST /api/grades
@@ -138,9 +157,6 @@ router.get('/report-card/:studentId/:term', protect, authorize('admin', 'super-a
     if (!student) {
       return res.status(404).json({ error: { message: 'Student not found' } });
     }
-    if (String(student.currentClass) !== String(classId)) {
-      return res.status(400).json({ error: { message: 'Student is not assigned to the selected class' } });
-    }
     if (!(await canAccessStudent(req.user, studentId))) {
       return res.status(403).json({ error: { message: 'Not authorized to view this report card' } });
     }
@@ -178,9 +194,147 @@ router.get('/report-card/:studentId/:term', protect, authorize('admin', 'super-a
   }
 });
 
+// @route   GET /api/grades/report-card/verify/:token
+// @desc    Verify a published report card from its QR code
+// @access  Public
+router.get('/report-card/verify/:token', async (req, res) => {
+  const details = readReportCardToken(req.params.token);
+  if (!details) return res.status(400).json({ verified: false, error: { message: 'Invalid verification code' } });
+
+  try {
+    const student = await Student.findById(details.studentId).populate('user', 'name').select('studentId admissionNumber currentClassLevel currentStream user');
+    if (!student) return res.status(404).json({ verified: false, error: { message: 'Student not found' } });
+    const resultCount = await ExamResult.countDocuments({
+      student: details.studentId,
+      term: details.term,
+      academicYear: details.academicYear,
+      approvalStatus: 'published',
+    });
+    res.json({
+      verified: resultCount > 0,
+      student: student.user?.name,
+      studentId: student.studentId,
+      admissionNumber: student.admissionNumber,
+      classLevel: student.currentClassLevel,
+      stream: student.currentStream,
+      term: details.term,
+      academicYear: details.academicYear,
+      resultCount,
+    });
+  } catch (error) {
+    res.status(500).json({ verified: false, error: { message: error.message } });
+  }
+});
+
 // @route   GET /api/grades/report-card/:studentId/:term/pdf
-// @desc    Generate a printable PDF report card (Uganda format)
+// @desc    Generate an NCDC (S1-S4) or UACE (S5-S6) PDF report card
 // @access  Private
+router.get('/report-card/:studentId/:term/pdf', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
+  const { studentId, term } = req.params;
+  const academicYear = Number(req.query.academicYear || new Date().getFullYear());
+
+  try {
+    const student = await Student.findById(studentId).populate('user', 'name email').populate('class', 'name level');
+    if (!student) return res.status(404).json({ error: { message: 'Student not found' } });
+    if (!(await canAccessStudent(req.user, studentId))) return res.status(403).json({ error: { message: 'Not authorized to view this report card' } });
+
+    const results = await ExamResult.find({ student: studentId, term, academicYear, approvalStatus: 'published' })
+      .populate('subject', 'name code')
+      .sort({ 'subject.name': 1, examType: 1 });
+    const isUace = ['S5', 'S6'].includes(student.currentClassLevel);
+    const token = reportCardToken(studentId, term, academicYear);
+    const verificationUrl = `${process.env.PUBLIC_API_URL || 'http://localhost:5000/api'}/grades/report-card/verify/${token}`;
+    const qrData = await QRCode.toDataURL(verificationUrl, { margin: 1, width: 100 });
+    const doc = new PDFDocument({ margin: 42, size: 'A4' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${isUace ? 'uace' : 'ncdc'}-report-card-${student.studentId}-${academicYear}.pdf"`);
+    doc.pipe(res);
+
+    const pageW = doc.page.width - 84;
+    const primary = '#123b68';
+    const accent = '#d99a17';
+    const name = student.user?.name || 'Student';
+    const classLevel = student.currentClassLevel || student.class?.level || '—';
+    const publishedResults = results.filter(result => result.approvalStatus === 'published');
+    const bySubject = new Map();
+    publishedResults.forEach(result => {
+      const key = String(result.subject?._id || result.subject?.name || result._id);
+      if (!bySubject.has(key)) bySubject.set(key, []);
+      bySubject.get(key).push(result);
+    });
+
+    doc.fillColor(primary).font('Helvetica-Bold').fontSize(21).text('NDUGU ACADEMY', 42, 42, { align: 'center', width: pageW });
+    doc.fillColor('#334155').font('Helvetica').fontSize(9).text('SCHOOL REPORT CARD | UGANDA CURRICULUM', 42, 69, { align: 'center', width: pageW });
+    doc.moveTo(42, 84).lineTo(42 + pageW, 84).strokeColor(accent).lineWidth(3).stroke();
+    doc.image(qrData, 42 + pageW - 85, 95, { width: 72, height: 72 });
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10).text(isUace ? 'UACE STATEMENT OF RESULTS' : 'NCDC REPORT CARD', 42, 101);
+    doc.font('Helvetica').fontSize(9).text(`Name: ${name}`, 42, 122).text(`Student ID: ${student.studentId || '—'}`, 42, 137).text(`Class: ${classLevel} ${student.currentStream || ''}`, 42, 152).text(`Term: ${term} | Academic Year: ${academicYear}`, 42, 167);
+    doc.fontSize(7).fillColor('#64748b').text('Scan QR to verify this published report card', 42 + pageW - 180, 171, { width: 170, align: 'center' });
+
+    let y = 205;
+    const drawHeader = (headers, widths) => {
+      let x = 42;
+      doc.rect(42, y, pageW, 22).fill(primary);
+      doc.fillColor('#fff').font('Helvetica-Bold').fontSize(8);
+      headers.forEach((header, index) => { doc.text(header, x + 4, y + 7, { width: widths[index] - 8, align: index ? 'center' : 'left' }); x += widths[index]; });
+      y += 22;
+    };
+    const drawRow = (values, widths, index) => {
+      let x = 42;
+      doc.rect(42, y, pageW, 20).fill(index % 2 ? '#f8fafc' : '#ffffff').stroke('#dbe3ec');
+      doc.fillColor('#1e293b').font('Helvetica').fontSize(8);
+      values.forEach((value, valueIndex) => { doc.text(String(value ?? '—'), x + 4, y + 6, { width: widths[valueIndex] - 8, align: valueIndex ? 'center' : 'left' }); x += widths[valueIndex]; });
+      y += 20;
+    };
+
+    if (!isUace) {
+      const widths = [190, 72, 72, 72, pageW - 406];
+      drawHeader(['Subject', 'Formative 20%', 'Summative 80%', 'Final / 100', 'Grade & Remarks'], widths);
+      [...bySubject.values()].forEach((subjectResults, index) => {
+        const first = subjectResults[0];
+        const formative = subjectResults.filter(result => ['BOT', 'MOT', 'coursework', 'assignment'].includes(result.examType));
+        const summative = subjectResults.filter(result => ['EOT', 'mock'].includes(result.examType));
+        const average = list => list.length ? list.reduce((sum, result) => sum + (result.percentage ?? (result.marksObtained / result.maxMarks) * 100), 0) / list.length : 0;
+        const formativeScore = Math.round(average(formative) * 0.2);
+        const summativeScore = Math.round(average(summative) * 0.8);
+        const finalScore = formativeScore + summativeScore;
+        drawRow([first.subject?.name || first.subject?.code, formativeScore, summativeScore, finalScore, `${calculateUgGrade(finalScore)}${first.remarks ? ` - ${first.remarks}` : ''}`], widths, index);
+      });
+    } else {
+      const widths = [190, 92, 92, pageW - 374];
+      drawHeader(['Subject', 'Principal Mark', 'Grade', 'Points'], widths);
+      [...bySubject.values()].forEach((subjectResults, index) => {
+        const result = subjectResults.find(item => item.examType === 'EOT') || subjectResults[0];
+        const percentage = result.percentage ?? Math.round((result.marksObtained / result.maxMarks) * 100);
+        const grade = percentage >= 80 ? 'A' : percentage >= 70 ? 'B' : percentage >= 60 ? 'C' : percentage >= 50 ? 'D' : percentage >= 40 ? 'E' : 'F';
+        const points = { A: 6, B: 5, C: 4, D: 3, E: 2, F: 0 }[grade];
+        drawRow([result.subject?.name || result.subject?.code, percentage, grade, points], widths, index);
+      });
+    }
+
+    if (!results.length) {
+      doc.fillColor('#92400e').font('Helvetica-Oblique').fontSize(9).text('No published results are available for this term.', 42, y + 10, { width: pageW, align: 'center' });
+      y += 35;
+    }
+    const totalPoints = isUace ? [...bySubject.values()].reduce((sum, list) => {
+      const result = list.find(item => item.examType === 'EOT') || list[0];
+      const percentage = result?.percentage ?? 0;
+      return sum + (percentage >= 80 ? 6 : percentage >= 70 ? 5 : percentage >= 60 ? 4 : percentage >= 50 ? 3 : percentage >= 40 ? 2 : 0);
+    }, 0) : null;
+    doc.fillColor(primary).font('Helvetica-Bold').fontSize(10).text(isUace ? `TOTAL AGGREGATE POINTS: ${Math.min(totalPoints, 20)} / 20` : 'NCDC ASSESSMENT SUMMARY', 42, y + 18);
+    doc.fillColor('#334155').font('Helvetica').fontSize(8).text(isUace ? 'Principal marks are shown per subject. Grading follows the UACE A-F scale.' : 'Formative assessment contributes 20%; summative assessment contributes 80%.', 42, y + 34);
+    doc.text('Class Teacher Comment: _________________________________________________', 42, y + 63);
+    doc.text('Headteacher Comment: ___________________________________________________', 42, y + 82);
+    doc.fillColor('#64748b').fontSize(7).text(`Generated ${new Date().toLocaleDateString('en-UG')} | Published results only | Ndugu Academy`, 42, doc.page.height - 42, { align: 'center', width: pageW });
+    doc.end();
+  } catch (error) {
+    console.error('Dual report-card PDF error:', error);
+    if (!res.headersSent) res.status(500).json({ error: { message: error.message } });
+  }
+});
+
+// Legacy Grade-based PDF endpoint retained below for older integrations.
 router.get('/report-card/:studentId/:term/pdf', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
   const { studentId, term } = req.params;
   const academicYear = req.query.academicYear || new Date().getFullYear();

@@ -26,6 +26,7 @@ import HR from './pages/HR';
 import Library from './pages/Library';
 import Hostel from './pages/Hostel';
 import LeadershipPortal from './pages/LeadershipPortal';
+import Analytics from './pages/Analytics';
 import { canAccessTab } from './config/permissions';
 
 function DashboardContent() {
@@ -62,6 +63,7 @@ function DashboardContent() {
       case 'dashboard':
         if (user.role === 'headteacher') return <LeadershipPortal type="headteacher" setCurrentTab={setCurrentTab} />;
         if (user.role === 'director-of-studies') return <LeadershipPortal type="director-of-studies" setCurrentTab={setCurrentTab} />;
+        if (user.role === 'hod') return <LeadershipPortal type="hod" setCurrentTab={setCurrentTab} />;
         if (user.role === 'teacher') return <TeacherDashboard setCurrentTab={setCurrentTab} />;
         if (user.role === 'student') return <StudentDashboard setCurrentTab={setCurrentTab} />;
         if (user.role === 'parent') return <ParentPortal />;
@@ -99,6 +101,8 @@ function DashboardContent() {
         return <LMS />;
       case 'reports':
         return user.role === 'parent' ? <ParentGrades /> : user.role === 'student' ? <ParentGrades viewer="student" /> : <Reports />;
+      case 'analytics':
+        return <Analytics />;
       case 'settings':
         return <Settings />;
       case 'notifications':

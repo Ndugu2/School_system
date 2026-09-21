@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "buildCommand": "npm install --prefix web && npm run build --prefix web",
+  "outputDirectory": "web/dist",
   "installCommand": "npm install",
   "framework": "vite",
   "rewrites": [

@@ -4,6 +4,7 @@
   "description": "School Management System root workspace",
   "scripts": {
     "start": "node scripts/start-dev.js",
+    "dev": "node scripts/start-dev.js",
     "start:backend": "npm run dev --prefix backend",
     "start:web": "npm --prefix web run dev",
     "start:mobile": "npm run start --prefix mobile",

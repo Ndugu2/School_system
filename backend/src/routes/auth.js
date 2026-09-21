@@ -166,6 +166,9 @@ router.post('/demo-login', async (req, res) => {
     'director-of-studies': {
       email: 'dos@ndugu.ac.ug', password: 'dos123Demo!', name: 'Mr. Ocen David (Director of Studies)', role: 'director-of-studies'
     },
+    hod: {
+      email: 'hod@ndugu.ac.ug', password: 'hod123Demo!', name: 'Ms. Achieng Miriam (Head of Department)', role: 'hod'
+    },
     bursar: {
       email: 'bursar@ndugu.ac.ug',
       password: 'bursar123Demo!',

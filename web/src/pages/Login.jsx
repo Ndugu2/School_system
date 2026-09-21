@@ -13,6 +13,7 @@ export default function Login() {
     { label: 'Administrator', value: 'admin' },
     { label: 'Headteacher', value: 'headteacher' },
     { label: 'Director of Studies', value: 'director-of-studies' },
+    { label: 'Head of Department', value: 'hod' },
     { label: 'Finance Manager', value: 'bursar' },
     { label: 'Teacher', value: 'teacher' },
     { label: 'Student', value: 'student' },
