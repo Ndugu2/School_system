@@ -65,14 +65,14 @@ export default function Analytics() {
     : 0;
 
   return (
-    <div style={styles.page}>
-      <section style={styles.hero}>
+    <div className="analytics-page" style={styles.page}>
+      <section className="analytics-hero" style={styles.hero}>
         <div>
           <p style={styles.eyebrow}>Student success</p>
-          <h1 style={styles.title}>Risk watchlist</h1>
+          <h1 className="analytics-title" style={styles.title}>Risk watchlist</h1>
           <p style={styles.subtitle}>Use attendance, assessment, and assignment signals to focus support where it matters most.</p>
         </div>
-        <button style={styles.primaryButton} onClick={calculateRisk} disabled={calculating}>
+        <button className="analytics-primary-button" style={styles.primaryButton} onClick={calculateRisk} disabled={calculating}>
           <RefreshCw size={16} style={calculating ? styles.spin : undefined} />
           {calculating ? 'Calculating...' : 'Recalculate risk'}
         </button>
@@ -81,17 +81,17 @@ export default function Analytics() {
       {message && <div style={styles.message}>{message}</div>}
       {error && <div style={styles.error}>{error}</div>}
 
-      <section style={styles.statsGrid}>
-        <div style={styles.stat}><AlertTriangle size={20} color="#b91c1c" /><span style={styles.statContent}><small style={styles.statLabel}>Students flagged</small><strong style={styles.statValue}>{watchlist.length}</strong></span></div>
-        <div style={styles.stat}><AlertTriangle size={20} color="#c2410c" /><span style={styles.statContent}><small style={styles.statLabel}>High or critical</small><strong style={styles.statValue}>{highCount + criticalCount}</strong></span></div>
-        <div style={styles.stat}><ShieldCheck size={20} color="#15803d" /><span style={styles.statContent}><small style={styles.statLabel}>Critical cases</small><strong style={styles.statValue}>{criticalCount}</strong></span></div>
-        <div style={styles.stat}><Users size={20} color="#2563eb" /><span style={styles.statContent}><small style={styles.statLabel}>Average risk score</small><strong style={styles.statValue}>{averageRisk}/100</strong></span></div>
+      <section className="analytics-stats-grid" style={styles.statsGrid}>
+        <div style={styles.stat}><AlertTriangle size={20} color="#b91c1c" /><span style={styles.statContent}><small style={styles.statLabel}>Students flagged</small><strong className="analytics-stat-value" style={styles.statValue}>{watchlist.length}</strong></span></div>
+        <div style={styles.stat}><AlertTriangle size={20} color="#c2410c" /><span style={styles.statContent}><small style={styles.statLabel}>High or critical</small><strong className="analytics-stat-value" style={styles.statValue}>{highCount + criticalCount}</strong></span></div>
+        <div style={styles.stat}><ShieldCheck size={20} color="#15803d" /><span style={styles.statContent}><small style={styles.statLabel}>Critical cases</small><strong className="analytics-stat-value" style={styles.statValue}>{criticalCount}</strong></span></div>
+        <div style={styles.stat}><Users size={20} color="#2563eb" /><span style={styles.statContent}><small style={styles.statLabel}>Average risk score</small><strong className="analytics-stat-value" style={styles.statValue}>{averageRisk}/100</strong></span></div>
       </section>
 
-      <section style={styles.panel}>
-        <div style={styles.panelHeader}>
+      <section className="analytics-panel" style={styles.panel}>
+        <div className="analytics-panel-header" style={styles.panelHeader}>
           <div><p style={styles.eyebrow}>Needs attention</p><h2 style={styles.panelTitle}>At-risk students</h2></div>
-          <button style={styles.secondaryButton} onClick={loadWatchlist} disabled={loading}><RefreshCw size={15} /> Refresh</button>
+          <button className="analytics-secondary-button" style={styles.secondaryButton} onClick={loadWatchlist} disabled={loading}><RefreshCw size={15} /> Refresh</button>
         </div>
         {loading ? <p style={styles.empty}>Loading the watchlist...</p> : watchlist.length === 0 ? <p style={styles.empty}>No students are currently above the watchlist threshold.</p> : (
           <div style={styles.tableWrap}>

@@ -72,9 +72,16 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
   const filteredMenuItems = menuItems.filter(item => canAccessTab(user?.role, item.id));
 
   return (
-    <div style={styles.appContainer}>
+    <div style={{ ...styles.appContainer, overflowX: 'hidden' }}>
       {/* Sidebar */}
-      <aside style={{ ...styles.sidebar, left: sidebarOpen ? 0 : '-280px' }}>
+      <aside
+        style={{
+          ...styles.sidebar,
+          left: sidebarOpen ? 0 : '-280px',
+          boxShadow: isMobile && sidebarOpen ? '0 20px 60px rgba(15, 23, 42, 0.18)' : 'none',
+          width: isMobile ? 'min(280px, 85vw)' : 'var(--sidebar-width)',
+        }}
+      >
         <div style={styles.sidebarHeader}>
           <div style={styles.logoContainer}>
             <GraduationCap size={28} color="#fbbf24" />
@@ -123,10 +130,18 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
       </aside>
 
       {/* Main Content Area */}
-      <div style={{ ...styles.mainArea, marginLeft: sidebarOpen ? 'var(--sidebar-width)' : 0 }}>
+      <div
+        className="app-main-area"
+        style={{
+          ...styles.mainArea,
+          marginLeft: isMobile ? 0 : (sidebarOpen ? 'var(--sidebar-width)' : 0),
+          width: isMobile ? '100%' : undefined,
+          maxWidth: '100%',
+        }}
+      >
         {/* Topbar */}
-        <header style={styles.header}>
-          <div style={styles.headerLeft}>
+        <header className="app-header" style={styles.header}>
+          <div className="app-header-left" style={styles.headerLeft}>
             <button
               style={styles.menuToggleBtn}
               onClick={() => setSidebarOpen(prev => !prev)}
@@ -134,12 +149,12 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
             >
               <Menu size={22} />
             </button>
-            <h2 style={styles.pageTitle}>
+            <h2 className="app-page-title" style={styles.pageTitle}>
               {menuItems.find(i => i.id === currentTab)?.label || 'Overview'}
             </h2>
           </div>
 
-          <div style={styles.headerRight}>
+          <div className="app-header-right" style={styles.headerRight}>
             {/* Theme Toggle */}
             <button onClick={toggleTheme} style={styles.iconBtn}>
               {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
@@ -151,11 +166,11 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
             </button>
 
             {/* Profile Summary */}
-            <div style={styles.profileBadge}>
+            <div className="app-profile-badge" style={styles.profileBadge}>
               <div style={styles.avatarPlaceholder}>
                 {userInitial}
               </div>
-              <div style={styles.profileText}>
+              <div className="app-profile-text" style={styles.profileText}>
                 <span style={styles.profileName}>{user?.name || 'User'}</span>
                 <span style={styles.profileRole}>{userRole}</span>
               </div>
@@ -164,7 +179,7 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
         </header>
 
         {/* Dashboard Content body */}
-        <main style={styles.contentBody}>
+        <main className="app-content-body" style={styles.contentBody}>
           <div className="animate-fade-in">
             {children}
           </div>
