@@ -82,6 +82,9 @@ app.use('/api/academic-years',  require('./routes/academicYears'));
 app.use('/api/registrations',   require('./routes/registrations'));
 app.use('/api/requirements',    require('./routes/requirements'));
 
+// ── Report Cards (dual NCDC / UACE PDF generator) ─────────────────────────
+app.use('/api/report-cards',    require('./routes/reportCards'));
+
 // ── Audit Log (read-only, super-admin) ───────────────────────────────────────
 app.use('/api/audit-logs',      require('./routes/auditLogs'));
 
