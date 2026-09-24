@@ -51,7 +51,7 @@ app.use((req, res, next) => {
 const startServer = async () => {
   try {
     await mongoose.connect(mongoUri);
-    console.log('✅ MongoDB connected successfully.');
+    console.log(`✅ MongoDB connected successfully to: ${mongoose.connection.host}/${mongoose.connection.name}`);
     app.listen(PORT, () => {
       console.log(`🚀 Ndugu Academy Server running on port ${PORT}`);
     });
