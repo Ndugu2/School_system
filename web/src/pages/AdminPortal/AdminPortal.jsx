@@ -778,177 +778,176 @@ export default function AdminPortal({ onSwitchToLegacy }) {
           </div>
         </div>
 
-        {/* TAB 1: OVERVIEW — NO BORDERS ON CARDS */}
+        {/* TAB 1: OVERVIEW — SLEEK COMPACT EXECUTIVE DASHBOARD */}
         {activeTab === 'overview' && (
           <>
-            {/* Stat Cards Grid */}
-            <div className="ap-stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            {/* Stat Cards Grid — Balanced 6 Cards */}
+            <div className="ap-stat-grid">
               
               {/* Card 1: Academic Year & Term */}
               <div className="ap-stat-card" onClick={() => handleTabChange('academic-years')} style={{ cursor: 'pointer' }}>
                 <div className="ap-stat-top">
-                  <span className="ap-stat-label">Active Academic Year</span>
+                  <span className="ap-stat-label">Academic Year</span>
                   <div className="ap-stat-icon" style={{ backgroundColor: 'rgba(197, 155, 39, 0.15)' }}>
-                    <Calendar size={18} color="#d8b257" />
+                    <Calendar size={15} color="#d8b257" />
                   </div>
                 </div>
                 <div className="ap-stat-val" style={{ color: '#d8b257' }}>
                   {academicYearsList.find(y => y.isActive)?.year || 2026}
                 </div>
                 <div className="ap-stat-footer">
-                  <span style={{ color: '#34d399', fontWeight: 800 }}>● {academicYearsList.find(y => y.isActive)?.terms?.find(t => t.isCurrent)?.name || 'Term I'} Active</span>
-                  <span style={{ color: '#94a3b8' }}>&bull; Switch Term</span>
+                  <span style={{ color: '#34d399', fontWeight: 700 }}>● {academicYearsList.find(y => y.isActive)?.terms?.find(t => t.isCurrent)?.name || 'Term I'} Active</span>
+                  <span style={{ color: '#94a3b8' }}>&bull; Switch</span>
                 </div>
               </div>
 
-              {/* Card 2: Curriculum Subjects */}
-              <div className="ap-stat-card" onClick={() => handleTabChange('subjects')} style={{ cursor: 'pointer' }}>
-                <div className="ap-stat-top">
-                  <span className="ap-stat-label">Curriculum Subjects</span>
-                  <div className="ap-stat-icon" style={{ backgroundColor: 'rgba(96, 165, 250, 0.15)' }}>
-                    <BookOpen size={18} color="#60a5fa" />
-                  </div>
-                </div>
-                <div className="ap-stat-val" style={{ color: '#60a5fa' }}>{subjectsList.length}</div>
-                <div className="ap-stat-footer">
-                  <ArrowUpRight size={14} color="#60a5fa" />
-                  <span>O-Level &amp; A-Level Catalog</span>
-                </div>
-              </div>
-
-              {/* Card 3: Classes & Streams */}
-              <div className="ap-stat-card" onClick={() => handleTabChange('classes')} style={{ cursor: 'pointer' }}>
-                <div className="ap-stat-top">
-                  <span className="ap-stat-label">Classes &amp; Streams</span>
-                  <div className="ap-stat-icon">
-                    <Layers size={18} color="#d8b257" />
-                  </div>
-                </div>
-                <div className="ap-stat-val">{classesList.length} Classes</div>
-                <div className="ap-stat-footer">
-                  <ArrowUpRight size={14} color="#d8b257" />
-                  <span>{classesList.reduce((acc, c) => acc + (c.streams?.length || 0), 0)} Attached Streams</span>
-                </div>
-              </div>
-
-              {/* Card 4: Teachers */}
-              <div className="ap-stat-card" onClick={() => handleTabChange('teachers')} style={{ cursor: 'pointer' }}>
-                <div className="ap-stat-top">
-                  <span className="ap-stat-label">Teaching Faculty</span>
-                  <div className="ap-stat-icon" style={{ backgroundColor: 'rgba(52, 211, 153, 0.15)' }}>
-                    <Users size={18} color="#34d399" />
-                  </div>
-                </div>
-                <div className="ap-stat-val" style={{ color: '#34d399' }}>{teachersList.length}</div>
-                <div className="ap-stat-footer">
-                  <ArrowUpRight size={14} color="#34d399" />
-                  <span>Subject &amp; Stream Teachers</span>
-                </div>
-              </div>
-
-              {/* Card 5: Admissions Intake */}
-              <div className="ap-stat-card" onClick={() => handleTabChange('admissions')} style={{ cursor: 'pointer' }}>
-                <div className="ap-stat-top">
-                  <span className="ap-stat-label">Admissions Intake</span>
-                  <div className="ap-stat-icon" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)' }}>
-                    <UserCheck size={18} color="#f59e0b" />
-                  </div>
-                </div>
-                <div className="ap-stat-val" style={{ color: '#d8b257' }}>{applicationsList.length}</div>
-                <div className="ap-stat-footer">
-                  <ArrowUpRight size={14} color="#f59e0b" />
-                  <span>{applicationsList.filter(a => a.status === 'pending').length} Pending Approvals</span>
-                </div>
-              </div>
-
-              {/* Card 6: Enrolled Students */}
+              {/* Card 2: Enrolled Students */}
               <div className="ap-stat-card" onClick={() => handleTabChange('students')} style={{ cursor: 'pointer' }}>
                 <div className="ap-stat-top">
                   <span className="ap-stat-label">Enrolled Students</span>
                   <div className="ap-stat-icon">
-                    <GraduationCap size={18} color="#d8b257" />
+                    <GraduationCap size={15} color="#d8b257" />
                   </div>
                 </div>
                 <div className="ap-stat-val">{studentsList.length}</div>
                 <div className="ap-stat-footer">
-                  <ArrowUpRight size={14} color="#d8b257" />
+                  <ArrowUpRight size={12} color="#d8b257" />
                   <span>Active Registration Records</span>
                 </div>
               </div>
 
-              {/* Card 7: System Health */}
-              <div className="ap-stat-card">
+              {/* Card 3: Admissions Pipeline */}
+              <div className="ap-stat-card" onClick={() => handleTabChange('admissions')} style={{ cursor: 'pointer' }}>
                 <div className="ap-stat-top">
-                  <span className="ap-stat-label">System Health</span>
-                  <div className="ap-stat-icon">
-                    <Activity size={18} color="#34d399" />
+                  <span className="ap-stat-label">Admissions Intake</span>
+                  <div className="ap-stat-icon" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)' }}>
+                    <UserCheck size={15} color="#f59e0b" />
                   </div>
                 </div>
-                <div className="ap-stat-val" style={{ color: '#34d399', fontSize: '24px' }}>
-                  {systemHealth.status}
-                </div>
+                <div className="ap-stat-val" style={{ color: '#d8b257' }}>{applicationsList.length}</div>
                 <div className="ap-stat-footer">
-                  <span className="ap-pulse-dot" style={{ width: '6px', height: '6px', backgroundColor: '#34d399' }} />
-                  <span>Latency: {systemHealth.latency} ms &bull; Live Synchronization</span>
+                  <ArrowUpRight size={12} color="#f59e0b" />
+                  <span>{applicationsList.filter(a => a.status === 'pending').length} Pending Approvals</span>
+                </div>
+              </div>
+
+              {/* Card 4: Classes & Streams */}
+              <div className="ap-stat-card" onClick={() => handleTabChange('classes')} style={{ cursor: 'pointer' }}>
+                <div className="ap-stat-top">
+                  <span className="ap-stat-label">Classes &amp; Streams</span>
+                  <div className="ap-stat-icon">
+                    <Layers size={15} color="#d8b257" />
+                  </div>
+                </div>
+                <div className="ap-stat-val">{classesList.length} <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ap-text-muted)' }}>Classes</span></div>
+                <div className="ap-stat-footer">
+                  <ArrowUpRight size={12} color="#d8b257" />
+                  <span>{classesList.reduce((acc, c) => acc + (c.streams?.length || 0), 0)} Attached Streams</span>
+                </div>
+              </div>
+
+              {/* Card 5: Curriculum Subjects */}
+              <div className="ap-stat-card" onClick={() => handleTabChange('subjects')} style={{ cursor: 'pointer' }}>
+                <div className="ap-stat-top">
+                  <span className="ap-stat-label">Curriculum Subjects</span>
+                  <div className="ap-stat-icon" style={{ backgroundColor: 'rgba(96, 165, 250, 0.15)' }}>
+                    <BookOpen size={15} color="#60a5fa" />
+                  </div>
+                </div>
+                <div className="ap-stat-val" style={{ color: '#60a5fa' }}>{subjectsList.length}</div>
+                <div className="ap-stat-footer">
+                  <ArrowUpRight size={12} color="#60a5fa" />
+                  <span>O-Level &amp; A-Level Catalog</span>
+                </div>
+              </div>
+
+              {/* Card 6: Teaching Faculty */}
+              <div className="ap-stat-card" onClick={() => handleTabChange('teachers')} style={{ cursor: 'pointer' }}>
+                <div className="ap-stat-top">
+                  <span className="ap-stat-label">Teaching Faculty</span>
+                  <div className="ap-stat-icon" style={{ backgroundColor: 'rgba(52, 211, 153, 0.15)' }}>
+                    <Users size={15} color="#34d399" />
+                  </div>
+                </div>
+                <div className="ap-stat-val" style={{ color: '#34d399' }}>{teachersList.length}</div>
+                <div className="ap-stat-footer">
+                  <ArrowUpRight size={12} color="#34d399" />
+                  <span>Subject &amp; Stream Teachers</span>
                 </div>
               </div>
             </div>
 
-            {/* Quick Actions & Recent Staff Overview — NO CARD BORDERS */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
+            {/* Quick Actions & Recent Staff Overview */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
               <div className="ap-card">
-                <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: '#fff' }}>
-                  <Sparkles size={18} color="#d8b257" />
-                  <span>Administrative Operations</span>
-                </h3>
-                <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px' }}>
-                  Quick shortcuts to enroll students, configure classes, or provision faculty logins.
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px', color: '#fff' }}>
+                    <Sparkles size={16} color="#d8b257" />
+                    <span>Administrative Operations</span>
+                  </h3>
+                  <span style={{ fontSize: '11px', color: 'var(--ap-text-dim)' }}>Core Shortcuts</span>
+                </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div className="ap-quick-grid">
                   <button
                     onClick={() => setShowAddClassModal(true)}
-                    className="ap-btn-secondary"
-                    style={{ justifyContent: 'flex-start', padding: '14px', width: '100%' }}
+                    className="ap-quick-tile"
                   >
-                    <School size={18} color="#d8b257" />
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontWeight: 700, fontSize: '13px' }}>Add Academic Class</div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>Create S1, S2, S3, S4, S5 or S6 with streams</div>
+                    <div className="ap-quick-tile-icon">
+                      <School size={16} />
+                    </div>
+                    <div>
+                      <div className="ap-quick-tile-title">Add Class</div>
+                      <div className="ap-quick-tile-desc">S1–S6 and Streams</div>
                     </div>
                   </button>
 
                   <button
                     onClick={() => setShowAddStudentModal(true)}
-                    className="ap-btn-secondary"
-                    style={{ justifyContent: 'flex-start', padding: '14px', width: '100%' }}
+                    className="ap-quick-tile"
                   >
-                    <GraduationCap size={18} color="#d8b257" />
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontWeight: 700, fontSize: '13px' }}>Enroll Student</div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>Assign student registration ID and parent contact</div>
+                    <div className="ap-quick-tile-icon">
+                      <GraduationCap size={16} />
+                    </div>
+                    <div>
+                      <div className="ap-quick-tile-title">Enroll Student</div>
+                      <div className="ap-quick-tile-desc">Registration &amp; Parent</div>
                     </div>
                   </button>
 
                   <button
                     onClick={() => setShowAddUserModal(true)}
-                    className="ap-btn-secondary"
-                    style={{ justifyContent: 'flex-start', padding: '14px', width: '100%' }}
+                    className="ap-quick-tile"
                   >
-                    <UserPlus size={18} color="#d8b257" />
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontWeight: 700, fontSize: '13px' }}>Provision Staff Account</div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>Create teacher or bursar login credentials</div>
+                    <div className="ap-quick-tile-icon">
+                      <UserPlus size={16} />
+                    </div>
+                    <div>
+                      <div className="ap-quick-tile-title">Staff Account</div>
+                      <div className="ap-quick-tile-desc">Teacher / Bursar login</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => handleTabChange('permits')}
+                    className="ap-quick-tile"
+                  >
+                    <div className="ap-quick-tile-icon">
+                      <FileCheck2 size={16} />
+                    </div>
+                    <div>
+                      <div className="ap-quick-tile-title">Entry Permits</div>
+                      <div className="ap-quick-tile-desc">Licoka Clearance Status</div>
                     </div>
                   </button>
                 </div>
               </div>
 
-              {/* Recent Staff Accounts — NO CARD BORDER */}
+              {/* Recent Staff Accounts */}
               <div className="ap-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px', color: '#fff' }}>
-                    <Users size={18} color="#d8b257" />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px', color: '#fff' }}>
+                    <Users size={16} color="#d8b257" />
                     <span>Academic &amp; Administrative Personnel</span>
                   </h3>
                   <button
@@ -960,49 +959,27 @@ export default function AdminPortal({ onSwitchToLegacy }) {
                 </div>
 
                 {usersList.length === 0 ? (
-                  <div className="ap-empty-state">
-                    <Users size={32} color="#d8b257" />
-                    <p>No staff accounts registered yet.</p>
-                    <button onClick={() => setShowAddUserModal(true)} className="ap-btn-primary" style={{ padding: '8px 14px' }}>
+                  <div className="ap-empty-state" style={{ padding: '24px 16px' }}>
+                    <Users size={28} color="#d8b257" />
+                    <p style={{ fontSize: '12px', margin: '8px 0' }}>No staff accounts registered yet.</p>
+                    <button onClick={() => setShowAddUserModal(true)} className="ap-btn-primary" style={{ padding: '6px 12px', fontSize: '12px' }}>
                       Add First User
                     </button>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {usersList.slice(0, 5).map((u) => (
-                      <div
-                        key={u._id || u.email}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '12px 16px',
-                          backgroundColor: '#0b1220',
-                          borderRadius: '12px',
-                          border: 'none'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            backgroundColor: 'rgba(197, 155, 39, 0.12)',
-                            color: '#d8b257',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 800,
-                            fontSize: '13px'
-                          }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {usersList.slice(0, 4).map((u) => (
+                      <div key={u._id || u.email} className="ap-person-row">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div className="ap-person-avatar">
                             {u.name?.charAt(0) || 'U'}
                           </div>
                           <div>
-                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{u.name}</div>
-                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{u.email}</div>
+                            <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>{u.name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--ap-text-dim)' }}>{u.email}</div>
                           </div>
                         </div>
-                        <span className="ap-badge">{u.role}</span>
+                        <span className="ap-badge" style={{ fontSize: '10.5px', padding: '3px 8px' }}>{u.role}</span>
                       </div>
                     ))}
                   </div>

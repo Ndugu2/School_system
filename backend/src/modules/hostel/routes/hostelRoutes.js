@@ -28,30 +28,86 @@ router.post('/dormitories', protect, authorize('super-admin', 'admin'), async (r
   }
 });
 
-router.put('/dormitories/:id', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.delete('/dormitories/:id', protect, authorize('super-admin', 'admin'), async (req, res) => {
   try {
-    const dorm = await Dormitory.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const dorm = await Dormitory.findById(req.params.id);
     if (!dorm) return res.status(404).json({ error: { message: 'Dormitory not found' } });
-    res.json(dorm);
+
+    // Deactivate associated rooms and assignments
+    const rooms = await HostelRoom.find({ dormitory: dorm._id });
+    const roomIds = rooms.map(r => r._id);
+    await BoarderAssignment.deleteMany({ room: { $in: roomIds } });
+    await HostelRoom.deleteMany({ dormitory: dorm._id });
+    await Dormitory.findByIdAndDelete(req.params.id);
+
+    res.json({ message: 'Dormitory and associated rooms removed successfully' });
   } catch (err) {
-    res.status(400).json({ error: { message: err.message } });
+    res.status(500).json({ error: { message: err.message } });
   }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ROOMS
+// ROOMS — DYNAMIC BED SPACES & LIVE OCCUPANCY
 // ═══════════════════════════════════════════════════════════════════════════
 
 router.get('/rooms', protect, async (req, res) => {
   try {
     const { dormitoryId } = req.query;
     const query = { isActive: true };
-    if (dormitoryId) query.dormitory = dormitoryId;
+    if (dormitoryId && dormitoryId !== 'all') query.dormitory = dormitoryId;
 
     const rooms = await HostelRoom.find(query)
       .populate('dormitory', 'name gender')
-      .sort({ dormitory: 1, roomNumber: 1 });
-    res.json(rooms);
+      .sort({ roomNumber: 1 })
+      .lean();
+
+    // Fetch active boarders for each room
+    const roomIds = rooms.map(r => r._id);
+    const activeAssignments = await BoarderAssignment.find({
+      room: { $in: roomIds },
+      status: 'active'
+    }).populate({
+      path: 'student',
+      populate: { path: 'user', select: 'name email' }
+    }).lean();
+
+    const assignmentsByRoom = {};
+    for (const a of activeAssignments) {
+      const rId = String(a.room);
+      if (!assignmentsByRoom[rId]) assignmentsByRoom[rId] = [];
+      assignmentsByRoom[rId].push({
+        _id: a._id,
+        assignmentId: a._id,
+        studentId: a.student?._id,
+        name: a.student?.user?.name || a.student?.admissionNumber || 'Student',
+        admissionNumber: a.student?.admissionNumber || a.student?.studentId || '—',
+        gender: a.student?.gender,
+        bedNumber: a.bedNumber || '—',
+        checkInDate: a.checkInDate,
+        feeStatus: a.feeStatus || 'unpaid'
+      });
+    }
+
+    const enrichedRooms = rooms.map(r => {
+      const boarders = assignmentsByRoom[String(r._id)] || [];
+      const occupied = boarders.length;
+      const capacity = Number(r.capacity) || 4;
+      const freeBeds = Math.max(0, capacity - occupied);
+      return {
+        ...r,
+        roomNo: r.roomNumber,
+        dormName: r.dormitory?.name || 'Unassigned Hall',
+        gender: r.dormitory?.gender || 'Mixed',
+        dormitoryId: r.dormitory?._id,
+        capacity,
+        occupied,
+        freeBeds,
+        boarders,
+        status: occupied >= capacity ? 'full' : 'available'
+      };
+    });
+
+    res.json(enrichedRooms);
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
   }
@@ -59,12 +115,50 @@ router.get('/rooms', protect, async (req, res) => {
 
 router.post('/rooms', protect, authorize('super-admin', 'admin'), async (req, res) => {
   try {
-    const room = await HostelRoom.create(req.body);
-    // Update dormitory totals
-    await Dormitory.findByIdAndUpdate(req.body.dormitory, {
-      $inc: { totalRooms: 1, totalCapacity: req.body.capacity || 4 },
+    let { dormitory, dormitoryName, gender = 'Male', roomNumber, capacity = 4, floor, roomType = 'dormitory', notes } = req.body;
+
+    if (!roomNumber) {
+      return res.status(400).json({ error: { message: 'Room number is required' } });
+    }
+
+    // Auto-resolve or create dormitory if dormitoryName provided
+    if (!dormitory && dormitoryName) {
+      let dormDoc = await Dormitory.findOne({ name: dormitoryName.trim() });
+      if (!dormDoc) {
+        dormDoc = await Dormitory.create({
+          name: dormitoryName.trim(),
+          gender: gender || 'Male'
+        });
+      }
+      dormitory = dormDoc._id;
+    }
+
+    if (!dormitory) {
+      return res.status(400).json({ error: { message: 'Dormitory or dormitory name is required' } });
+    }
+
+    // Check if room with same number already exists in this dorm
+    const existing = await HostelRoom.findOne({ dormitory, roomNumber: roomNumber.trim(), isActive: true });
+    if (existing) {
+      return res.status(400).json({ error: { message: `Room "${roomNumber}" already exists in this dormitory` } });
+    }
+
+    const room = await HostelRoom.create({
+      dormitory,
+      roomNumber: roomNumber.trim(),
+      capacity: parseInt(capacity) || 4,
+      floor: floor?.trim(),
+      roomType,
+      notes: notes?.trim()
     });
-    res.status(201).json(room);
+
+    // Update dormitory totals
+    await Dormitory.findByIdAndUpdate(dormitory, {
+      $inc: { totalRooms: 1, totalCapacity: parseInt(capacity) || 4 },
+    });
+
+    const populatedRoom = await HostelRoom.findById(room._id).populate('dormitory', 'name gender');
+    res.status(201).json(populatedRoom);
   } catch (err) {
     res.status(400).json({ error: { message: err.message } });
   }
@@ -72,17 +166,90 @@ router.post('/rooms', protect, authorize('super-admin', 'admin'), async (req, re
 
 router.put('/rooms/:id', protect, authorize('super-admin', 'admin'), async (req, res) => {
   try {
+    const oldRoom = await HostelRoom.findById(req.params.id);
+    if (!oldRoom) return res.status(404).json({ error: { message: 'Room not found' } });
+
     const room = await HostelRoom.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!room) return res.status(404).json({ error: { message: 'Room not found' } });
+    
+    // If capacity changed, update dorm total capacity
+    if (req.body.capacity && req.body.capacity !== oldRoom.capacity) {
+      const diff = parseInt(req.body.capacity) - oldRoom.capacity;
+      await Dormitory.findByIdAndUpdate(room.dormitory, { $inc: { totalCapacity: diff } });
+    }
+
     res.json(room);
   } catch (err) {
     res.status(400).json({ error: { message: err.message } });
   }
 });
 
+router.delete('/rooms/:id', protect, authorize('super-admin', 'admin'), async (req, res) => {
+  try {
+    const room = await HostelRoom.findById(req.params.id);
+    if (!room) return res.status(404).json({ error: { message: 'Room not found' } });
+
+    // Remove active boarders
+    await BoarderAssignment.deleteMany({ room: room._id });
+
+    // Decrement dormitory totals
+    if (room.dormitory) {
+      await Dormitory.findByIdAndUpdate(room.dormitory, {
+        $inc: { totalRooms: -1, totalCapacity: -(room.capacity || 0) }
+      });
+    }
+
+    await HostelRoom.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Room and its bed spaces removed successfully' });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
-// BOARDER ASSIGNMENTS
+// ELIGIBLE STUDENTS & BOARDER ALLOCATIONS
 // ═══════════════════════════════════════════════════════════════════════════
+
+router.get('/eligible-students', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
+  try {
+    const Student = require('../../../models/Student');
+    const { search, gender } = req.query;
+    const query = { studentStatus: { $in: ['active', 'enrolled', 'admitted'] } };
+    if (gender && gender !== 'Mixed') {
+      query.gender = gender;
+    }
+
+    const students = await Student.find(query)
+      .populate('user', 'name email')
+      .populate('currentClass', 'name level stream')
+      .sort({ 'user.name': 1 })
+      .limit(150)
+      .lean();
+
+    // Check which students already have active boarder assignments
+    const activeAssignments = await BoarderAssignment.find({ status: 'active' }).lean();
+    const assignedStudentIds = new Set(activeAssignments.map(a => String(a.student)));
+
+    let list = students.map(s => ({
+      _id: s._id,
+      name: s.user?.name || s.admissionNumber || 'Unnamed Student',
+      studentId: s.studentId,
+      admissionNumber: s.admissionNumber || s.studentId,
+      gender: s.gender,
+      className: s.currentClass?.name || 'Unassigned',
+      boardingApproval: Boolean(s.boardingApproval),
+      isAssigned: assignedStudentIds.has(String(s._id))
+    }));
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(s => s.name.toLowerCase().includes(q) || s.admissionNumber?.toLowerCase().includes(q));
+    }
+
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
 
 // GET /api/hostel/boarders?term=&academicYear=&dormitoryId=&status=
 router.get('/boarders', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
@@ -95,8 +262,8 @@ router.get('/boarders', protect, authorize('super-admin', 'admin', 'teacher'), a
     if (status) query.status = status;
 
     const boarders = await BoarderAssignment.find(query)
-      .populate({ path: 'student', populate: { path: 'user', select: 'name' } })
-      .populate('room', 'roomNumber floor roomType')
+      .populate({ path: 'student', populate: { path: 'user', select: 'name email' } })
+      .populate('room', 'roomNumber floor roomType capacity')
       .populate('dormitory', 'name gender')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
@@ -111,34 +278,103 @@ router.get('/boarders', protect, authorize('super-admin', 'admin', 'teacher'), a
 
 // POST /api/hostel/boarders — assign student to room
 router.post('/boarders', protect, authorize('super-admin', 'admin'), async (req, res) => {
-  const { student, room, term, academicYear } = req.body;
+  const Student = require('../../../models/Student');
+  const AcademicYear = require('../../../models/AcademicYear');
+  let { student, room, bedNumber, term, academicYear, notes } = req.body;
+
   try {
     // Check room availability
-    const hostelRoom = await HostelRoom.findById(room);
+    const hostelRoom = await HostelRoom.findById(room).populate('dormitory');
     if (!hostelRoom) return res.status(404).json({ error: { message: 'Room not found' } });
 
+    // Determine current academic year & term if not provided
+    if (!academicYear || !term) {
+      const activeAY = await AcademicYear.findOne({ isActive: true });
+      academicYear = academicYear || activeAY?.year || new Date().getFullYear();
+      term = term || activeAY?.terms?.find(t => t.isCurrent)?.name || 'Term 1';
+    }
+
+    // Standardize term format (e.g. 'Term 1' or 'Term I')
+    if (term === 'Term I') term = 'Term 1';
+    if (term === 'Term II') term = 'Term 2';
+    if (term === 'Term III') term = 'Term 3';
+
     const currentOccupants = await BoarderAssignment.countDocuments({
-      room, term, academicYear: parseInt(academicYear), status: 'active',
+      room,
+      status: 'active'
     });
+
     if (currentOccupants >= hostelRoom.capacity) {
-      return res.status(400).json({ error: { message: `Room is full (${hostelRoom.capacity}/${hostelRoom.capacity})` } });
+      return res.status(400).json({
+        error: { message: `Room ${hostelRoom.roomNumber} is full (${currentOccupants}/${hostelRoom.capacity} beds occupied)` }
+      });
+    }
+
+    // Check if student exists and already assigned
+    const studentDoc = await Student.findById(student).populate('user', 'name');
+    if (!studentDoc) return res.status(404).json({ error: { message: 'Student not found' } });
+
+    const existingAssignment = await BoarderAssignment.findOne({
+      student: studentDoc._id,
+      status: 'active'
+    }).populate('room');
+
+    if (existingAssignment) {
+      return res.status(400).json({
+        error: { message: `${studentDoc.user?.name || 'Student'} is already allocated to Room ${existingAssignment.room?.roomNumber || ''}` }
+      });
     }
 
     const assignment = await BoarderAssignment.create({
-      ...req.body,
-      academicYear: parseInt(academicYear),
+      student: studentDoc._id,
+      dormitory: hostelRoom.dormitory?._id || hostelRoom.dormitory,
+      room: hostelRoom._id,
+      bedNumber: bedNumber?.trim() || `Bed ${currentOccupants + 1}`,
+      term: term || 'Term 1',
+      academicYear: parseInt(academicYear) || new Date().getFullYear(),
       assignedBy: req.user._id,
+      notes: notes?.trim(),
+      status: 'active'
     });
 
     // Update room occupancy
     await HostelRoom.findByIdAndUpdate(room, { $inc: { currentOccupancy: 1 } });
 
-    res.status(201).json(assignment);
+    // Ensure student boardingApproval is true
+    studentDoc.boardingApproval = true;
+    await studentDoc.save();
+
+    const populated = await BoarderAssignment.findById(assignment._id)
+      .populate({ path: 'student', populate: { path: 'user', select: 'name email' } })
+      .populate('room', 'roomNumber capacity')
+      .populate('dormitory', 'name gender');
+
+    res.status(201).json(populated);
   } catch (err) {
     if (err.code === 11000) {
-      return res.status(400).json({ error: { message: 'Student already has a hostel assignment for this term' } });
+      return res.status(400).json({ error: { message: 'Student already has an active hostel assignment for this term' } });
     }
     res.status(400).json({ error: { message: err.message } });
+  }
+});
+
+// DELETE /api/hostel/boarders/:id — deallocate student from bed space
+router.delete('/boarders/:id', protect, authorize('super-admin', 'admin'), async (req, res) => {
+  try {
+    const assignment = await BoarderAssignment.findById(req.params.id);
+    if (!assignment) return res.status(404).json({ error: { message: 'Boarder assignment not found' } });
+
+    const roomId = assignment.room;
+    await BoarderAssignment.findByIdAndDelete(req.params.id);
+
+    // Decrement room occupancy
+    await HostelRoom.findByIdAndUpdate(roomId, {
+      $inc: { currentOccupancy: -1 }
+    });
+
+    res.json({ message: 'Student deallocated from room successfully' });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
   }
 });
 

@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 const feeStructureSchema = new mongoose.Schema({
   classLevel: {
     type: String,
-    enum: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'],
-    required: true
+    required: true,
+    trim: true
   },
   term: {
     type: String,
