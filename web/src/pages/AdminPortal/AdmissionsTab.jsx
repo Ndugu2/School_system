@@ -246,6 +246,23 @@ export default function AdmissionsTab({
                         <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
                           {app.gender === 'M' ? 'Male' : 'Female'} &bull; Prev: {app.former_school}
                         </div>
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '3px', flexWrap: 'wrap' }}>
+                          {app.ple_pass_slip && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#34d399', fontSize: '10.5px', backgroundColor: 'rgba(52, 211, 153, 0.12)', padding: '1px 6px', borderRadius: '4px' }}>
+                              <FileText size={10} /> PLE Slip
+                            </span>
+                          )}
+                          {app.recommendation_letter && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#60a5fa', fontSize: '10.5px', backgroundColor: 'rgba(96, 165, 250, 0.12)', padding: '1px 6px', borderRadius: '4px' }}>
+                              <FileText size={10} /> Recom. Letter
+                            </span>
+                          )}
+                          {app.uce_pass_slip && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#c084fc', fontSize: '10.5px', backgroundColor: 'rgba(192, 132, 252, 0.12)', padding: '1px 6px', borderRadius: '4px' }}>
+                              <FileText size={10} /> UCE Slip
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <span className="ap-badge" style={{ backgroundColor: '#131f37', color: '#fff' }}>
@@ -471,6 +488,101 @@ export default function AdmissionsTab({
                       <div><strong>Email:</strong> <span style={{ color: '#cbd5e1' }}>{p.email || 'N/A'}</span></div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* 6. Uploaded Academic Documents */}
+              <div>
+                <h4 style={{ fontSize: '15px', fontWeight: 800, color: '#d8b257', marginBottom: '12px' }}>
+                  6. Uploaded Academic Credentials (PDFs)
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                  
+                  {/* PLE Pass Slip */}
+                  <div style={{ backgroundColor: '#0b1220', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
+                        UNEB PLE Pass Slip
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
+                        Primary Leaving Exam
+                      </div>
+                    </div>
+                    {selectedApp.ple_pass_slip ? (
+                      <a 
+                        href={selectedApp.ple_pass_slip} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="ap-btn-secondary"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px', color: '#d8b257', textDecoration: 'none', padding: '8px 12px' }}
+                      >
+                        <FileText size={14} />
+                        <span>View PLE Slip (PDF)</span>
+                        <Eye size={12} />
+                      </a>
+                    ) : (
+                      <span style={{ fontSize: '12px', color: '#ef4444' }}>Not Uploaded</span>
+                    )}
+                  </div>
+
+                  {/* Recommendation Letter (for S.2-S.4) */}
+                  {['S2', 'S3', 'S4'].includes(selectedApp.class_applying) && (
+                    <div style={{ backgroundColor: '#0b1220', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
+                      <div>
+                        <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
+                          Former School Letter
+                        </div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
+                          Headteacher Recommendation
+                        </div>
+                      </div>
+                      {selectedApp.recommendation_letter ? (
+                        <a 
+                          href={selectedApp.recommendation_letter} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="ap-btn-secondary"
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px', color: '#d8b257', textDecoration: 'none', padding: '8px 12px' }}
+                        >
+                          <FileText size={14} />
+                          <span>View Letter (PDF)</span>
+                          <Eye size={12} />
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: '#ef4444' }}>Not Uploaded</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* UCE Pass Slip (for S.5-S.6) */}
+                  {['S5', 'S6'].includes(selectedApp.class_applying) && (
+                    <div style={{ backgroundColor: '#0b1220', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
+                      <div>
+                        <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>
+                          UNEB S.4 (UCE) Slip
+                        </div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
+                          O-Level Certificate
+                        </div>
+                      </div>
+                      {selectedApp.uce_pass_slip ? (
+                        <a 
+                          href={selectedApp.uce_pass_slip} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="ap-btn-secondary"
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px', color: '#d8b257', textDecoration: 'none', padding: '8px 12px' }}
+                        >
+                          <FileText size={14} />
+                          <span>View UCE Slip (PDF)</span>
+                          <Eye size={12} />
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: '#ef4444' }}>Not Uploaded</span>
+                      )}
+                    </div>
+                  )}
+
                 </div>
               </div>
 

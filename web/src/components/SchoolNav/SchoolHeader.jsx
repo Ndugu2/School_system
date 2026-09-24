@@ -19,7 +19,8 @@ export default function SchoolHeader({ isAuthenticated, onOpenInquiry }) {
 
       <nav className="ug-nav-links">
         <NavLink 
-          to="/welcome" 
+          to="/" 
+          end
           className={({ isActive }) => `ug-nav-link ${isActive ? 'active' : ''}`}
         >
           Welcome
@@ -42,17 +43,11 @@ export default function SchoolHeader({ isAuthenticated, onOpenInquiry }) {
         >
           Admissions
         </NavLink>
-        <NavLink 
-          to="/portal-access" 
-          className={({ isActive }) => `ug-nav-link ${isActive ? 'active' : ''}`}
-        >
-          Portal Access
-        </NavLink>
       </nav>
 
       <div className="ug-nav-actions">
         <button 
-          onClick={onOpenInquiry || (() => navigate('/admissions'))} 
+          onClick={() => navigate('/admissions')} 
           className="btn-ug-inquire"
           id="btn-nav-admissions-desk"
         >

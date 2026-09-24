@@ -4,7 +4,7 @@ import {
   CheckCircle, FileText, Sparkles, Send, Phone, Mail, 
   MapPin, HelpCircle, ArrowRight, ShieldCheck, Download,
   Clock, AlertCircle, X, Search, School, UserCheck, HeartHandshake,
-  BookOpen, Award, Printer
+  BookOpen, Award, Printer, UploadCloud, Eye
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolNav/SchoolHeader';
 import SchoolFooter from '../../components/SchoolNav/SchoolFooter';
@@ -51,6 +51,15 @@ export default function AdmissionsPage({ isAuthenticated }) {
     combination_name: 'PCM / ICT',
     selected_subjects: ['English Language', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Geography', 'History & Political Education']
   });
+
+  // Academic Documents State (PDFs)
+  const [documents, setDocuments] = useState({
+    ple_pass_slip: null, // { url: string, name: string, size: string }
+    recommendation_letter: null,
+    uce_pass_slip: null
+  });
+  const [uploadingDoc, setUploadingDoc] = useState({});
+  const [docUploadErrors, setDocUploadErrors] = useState({});
 
   // Dynamic Options from Backend
   const [combinationsList, setCombinationsList] = useState([]);
@@ -107,11 +116,84 @@ export default function AdmissionsPage({ isAuthenticated }) {
     });
   };
 
+  // Upload Academic Document (PDF)
+  const handleDocUpload = async (docKey, file) => {
+    if (!file) return;
+
+    // Validate PDF
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setDocUploadErrors(prev => ({ ...prev, [docKey]: 'Only PDF documents are accepted. Please upload a PDF copy.' }));
+      return;
+    }
+
+    // Validate size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setDocUploadErrors(prev => ({ ...prev, [docKey]: 'File exceeds 10MB limit. Please upload a smaller PDF.' }));
+      return;
+    }
+
+    setUploadingDoc(prev => ({ ...prev, [docKey]: true }));
+    setDocUploadErrors(prev => ({ ...prev, [docKey]: null }));
+
+    const formDataUpload = new FormData();
+    formDataUpload.append('document', file);
+
+    try {
+      const res = await fetch('/api/student-applications/upload', {
+        method: 'POST',
+        body: formDataUpload
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || 'Upload failed');
+      }
+
+      setDocuments(prev => ({
+        ...prev,
+        [docKey]: {
+          url: data.url,
+          name: data.originalName || file.name,
+          size: (data.size / 1024).toFixed(1) + ' KB'
+        }
+      }));
+    } catch (err) {
+      setDocUploadErrors(prev => ({ ...prev, [docKey]: err.message || 'Error uploading file' }));
+    } finally {
+      setUploadingDoc(prev => ({ ...prev, [docKey]: false }));
+    }
+  };
+
+  // Remove an uploaded document
+  const handleRemoveDoc = (docKey) => {
+    setDocuments(prev => ({ ...prev, [docKey]: null }));
+    setDocUploadErrors(prev => ({ ...prev, [docKey]: null }));
+  };
+
   // Submit Application
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setSubmitError(null);
+
+    // Document Validation
+    if (!documents.ple_pass_slip) {
+      setSubmitError('Primary Leaving Examination (PLE) Pass Slip (PDF) is required for all applications.');
+      setSubmitting(false);
+      return;
+    }
+
+    if (['S2', 'S3', 'S4'].includes(formData.class_applying) && !documents.recommendation_letter) {
+      setSubmitError(`Recommendation Letter from Former School (PDF) is required for candidates applying to ${formData.class_applying}.`);
+      setSubmitting(false);
+      return;
+    }
+
+    if (['S5', 'S6'].includes(formData.class_applying) && !documents.uce_pass_slip) {
+      setSubmitError(`Senior 4 (UCE) Result Pass Slip (PDF) is required for candidates applying to ${formData.class_applying}.`);
+      setSubmitting(false);
+      return;
+    }
 
     // Build parent_details array
     const parent_details = [
@@ -153,7 +235,10 @@ export default function AdmissionsPage({ isAuthenticated }) {
       chronic_disease: formData.chronic_disease || 'None',
       parent_details,
       combination_name: formData.level === 'A' ? formData.combination_name : '',
-      selected_subjects: formData.level === 'O' ? formData.selected_subjects : []
+      selected_subjects: formData.level === 'O' ? formData.selected_subjects : [],
+      ple_pass_slip: documents.ple_pass_slip ? documents.ple_pass_slip.url : null,
+      recommendation_letter: documents.recommendation_letter ? documents.recommendation_letter.url : null,
+      uce_pass_slip: documents.uce_pass_slip ? documents.uce_pass_slip.url : null
     };
 
     try {
@@ -751,6 +836,282 @@ export default function AdmissionsPage({ isAuthenticated }) {
                   )}
                 </div>
 
+                {/* 6. REQUIRED ACADEMIC DOCUMENTS (PDFs) */}
+                <div style={{ marginBottom: '36px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '10px', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                    <h3 style={{ fontSize: '19px', fontWeight: 800, color: '#d8b257', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                      <FileText size={18} />
+                      <span>6. Required Academic Documents (Uganda Education Credentials)</span>
+                    </h3>
+                    <span style={{ fontSize: '12.5px', color: '#cbd5e1', backgroundColor: '#131f37', padding: '4px 10px', borderRadius: '6px' }}>
+                      PDF Format Only &bull; Max 10MB each
+                    </span>
+                  </div>
+
+                  {/* Informational Guidance Notice tailored to selected class */}
+                  <div style={{ backgroundColor: '#080e1a', padding: '16px 20px', borderRadius: '12px', marginBottom: '22px', borderLeft: '4px solid #c59b27' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#d8b257', marginBottom: '4px' }}>
+                      Documentation Requirements for {formData.class_applying} ({formData.level === 'O' ? 'Ordinary Level' : 'Advanced Level'}):
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#cbd5e1', lineHeight: 1.6 }}>
+                      {formData.class_applying === 'S1' && (
+                        <span>
+                          Senior One applicants are required to upload their <strong>UNEB Primary Leaving Examination (PLE) Result Pass Slip (PDF)</strong>.
+                        </span>
+                      )}
+                      {['S2', 'S3', 'S4'].includes(formData.class_applying) && (
+                        <span>
+                          Transfer applicants for <strong>{formData.class_applying}</strong> must upload their <strong>UNEB PLE Result Pass Slip (PDF)</strong> AND an <strong>Official Recommendation Letter from their Former School (PDF)</strong>.
+                        </span>
+                      )}
+                      {['S5', 'S6'].includes(formData.class_applying) && (
+                        <span>
+                          Advanced Level applicants for <strong>{formData.class_applying}</strong> must upload their <strong>UNEB PLE Result Pass Slip (PDF)</strong> AND their <strong>Senior 4 UNEB Uganda Certificate of Education (UCE) Result Pass Slip (PDF)</strong>.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+                    
+                    {/* DOCUMENT 1: PLE PASS SLIP (Always required for S1-S6) */}
+                    <div style={{ backgroundColor: '#080e1a', padding: '22px', borderRadius: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '16px' }}>
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                          <strong style={{ fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <FileText size={17} color="#d8b257" />
+                            <span>1. PLE Result Pass Slip *</span>
+                          </strong>
+                          <span style={{ fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '9999px', textTransform: 'uppercase', backgroundColor: 'rgba(197, 155, 39, 0.2)', color: '#d8b257' }}>
+                            Required (S1 - S6)
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '12.5px', color: '#94a3b8', lineHeight: 1.5, margin: 0 }}>
+                          Official UNEB Primary Leaving Examination slip with candidate index number, aggregates, and division.
+                        </p>
+                      </div>
+
+                      {documents.ple_pass_slip ? (
+                        <div style={{ backgroundColor: '#131f37', padding: '14px 16px', borderRadius: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                              <CheckCircle size={16} color="#10b981" />
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#34d399', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '170px' }}>
+                                {documents.ple_pass_slip.name}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '11px', color: '#94a3b8', backgroundColor: '#080e1a', padding: '2px 6px', borderRadius: '4px' }}>
+                              {documents.ple_pass_slip.size}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                            <a 
+                              href={documents.ple_pass_slip.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#d8b257', textDecoration: 'none', fontWeight: 700 }}
+                            >
+                              <Eye size={13} />
+                              <span>View PDF</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDoc('ple_pass_slip')}
+                              style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                            >
+                              Remove / Replace
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '22px 14px', backgroundColor: '#131f37', borderRadius: '10px', cursor: uploadingDoc.ple_pass_slip ? 'wait' : 'pointer', textAlign: 'center', transition: 'all 0.15s ease' }}>
+                            <UploadCloud size={24} color="#d8b257" />
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>
+                              {uploadingDoc.ple_pass_slip ? 'Uploading PLE Pass Slip...' : 'Click to Upload PLE Pass Slip'}
+                            </span>
+                            <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                              PDF format only (Max 10MB)
+                            </span>
+                            <input 
+                              type="file" 
+                              accept=".pdf,application/pdf"
+                              disabled={uploadingDoc.ple_pass_slip}
+                              onChange={(e) => handleDocUpload('ple_pass_slip', e.target.files[0])}
+                              style={{ display: 'none' }}
+                            />
+                          </label>
+                          {docUploadErrors.ple_pass_slip && (
+                            <div style={{ fontSize: '12px', color: '#f87171', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <AlertCircle size={13} />
+                              <span>{docUploadErrors.ple_pass_slip}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* DOCUMENT 2: RECOMMENDATION LETTER (Required for S2, S3, S4) */}
+                    {['S2', 'S3', 'S4'].includes(formData.class_applying) && (
+                      <div style={{ backgroundColor: '#080e1a', padding: '22px', borderRadius: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '16px' }}>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <strong style={{ fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <FileText size={17} color="#d8b257" />
+                              <span>2. Former School Recommendation *</span>
+                            </strong>
+                            <span style={{ fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '9999px', textTransform: 'uppercase', backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>
+                              Required for {formData.class_applying}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '12.5px', color: '#94a3b8', lineHeight: 1.5, margin: 0 }}>
+                            Official signed and stamped recommendation or transfer letter from the Headteacher of your previous school.
+                          </p>
+                        </div>
+
+                        {documents.recommendation_letter ? (
+                          <div style={{ backgroundColor: '#131f37', padding: '14px 16px', borderRadius: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                                <CheckCircle size={16} color="#10b981" />
+                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#34d399', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '170px' }}>
+                                  {documents.recommendation_letter.name}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '11px', color: '#94a3b8', backgroundColor: '#080e1a', padding: '2px 6px', borderRadius: '4px' }}>
+                                {documents.recommendation_letter.size}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                              <a 
+                                href={documents.recommendation_letter.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#d8b257', textDecoration: 'none', fontWeight: 700 }}
+                              >
+                                <Eye size={13} />
+                                <span>View PDF</span>
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveDoc('recommendation_letter')}
+                                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                              >
+                                Remove / Replace
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '22px 14px', backgroundColor: '#131f37', borderRadius: '10px', cursor: uploadingDoc.recommendation_letter ? 'wait' : 'pointer', textAlign: 'center', transition: 'all 0.15s ease' }}>
+                              <UploadCloud size={24} color="#d8b257" />
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>
+                                {uploadingDoc.recommendation_letter ? 'Uploading Letter...' : 'Click to Upload Recommendation Letter'}
+                              </span>
+                              <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                                PDF format only (Max 10MB)
+                              </span>
+                              <input 
+                                type="file" 
+                                accept=".pdf,application/pdf"
+                                disabled={uploadingDoc.recommendation_letter}
+                                onChange={(e) => handleDocUpload('recommendation_letter', e.target.files[0])}
+                                style={{ display: 'none' }}
+                              />
+                            </label>
+                            {docUploadErrors.recommendation_letter && (
+                              <div style={{ fontSize: '12px', color: '#f87171', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <AlertCircle size={13} />
+                                <span>{docUploadErrors.recommendation_letter}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* DOCUMENT 3: S.4 (UCE) PASS SLIP (Required for S5 and S6) */}
+                    {['S5', 'S6'].includes(formData.class_applying) && (
+                      <div style={{ backgroundColor: '#080e1a', padding: '22px', borderRadius: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '16px' }}>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <strong style={{ fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <FileText size={17} color="#d8b257" />
+                              <span>2. Senior 4 (UCE) Pass Slip *</span>
+                            </strong>
+                            <span style={{ fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '9999px', textTransform: 'uppercase', backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>
+                              Required for {formData.class_applying}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '12.5px', color: '#94a3b8', lineHeight: 1.5, margin: 0 }}>
+                            Official UNEB Uganda Certificate of Education (UCE) result pass slip with subject grades and total aggregates.
+                          </p>
+                        </div>
+
+                        {documents.uce_pass_slip ? (
+                          <div style={{ backgroundColor: '#131f37', padding: '14px 16px', borderRadius: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                                <CheckCircle size={16} color="#10b981" />
+                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#34d399', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '170px' }}>
+                                  {documents.uce_pass_slip.name}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '11px', color: '#94a3b8', backgroundColor: '#080e1a', padding: '2px 6px', borderRadius: '4px' }}>
+                                {documents.uce_pass_slip.size}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                              <a 
+                                href={documents.uce_pass_slip.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#d8b257', textDecoration: 'none', fontWeight: 700 }}
+                              >
+                                <Eye size={13} />
+                                <span>View PDF</span>
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveDoc('uce_pass_slip')}
+                                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                              >
+                                Remove / Replace
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '22px 14px', backgroundColor: '#131f37', borderRadius: '10px', cursor: uploadingDoc.uce_pass_slip ? 'wait' : 'pointer', textAlign: 'center', transition: 'all 0.15s ease' }}>
+                              <UploadCloud size={24} color="#d8b257" />
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>
+                                {uploadingDoc.uce_pass_slip ? 'Uploading UCE Pass Slip...' : 'Click to Upload S.4 (UCE) Pass Slip'}
+                              </span>
+                              <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                                PDF format only (Max 10MB)
+                              </span>
+                              <input 
+                                type="file" 
+                                accept=".pdf,application/pdf"
+                                disabled={uploadingDoc.uce_pass_slip}
+                                onChange={(e) => handleDocUpload('uce_pass_slip', e.target.files[0])}
+                                style={{ display: 'none' }}
+                              />
+                            </label>
+                            {docUploadErrors.uce_pass_slip && (
+                              <div style={{ fontSize: '12px', color: '#f87171', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <AlertCircle size={13} />
+                                <span>{docUploadErrors.uce_pass_slip}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                  </div>
+                </div>
+
                 {/* SUBMIT BUTTON */}
                 <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                   <div style={{ fontSize: '13.5px', color: '#94a3b8' }}>
@@ -854,6 +1215,54 @@ export default function AdmissionsPage({ isAuthenticated }) {
                     <div style={{ fontSize: '15px', color: '#cbd5e1', marginTop: '4px' }}>
                       {new Date(trackingResult.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </div>
+                  </div>
+                </div>
+
+                {/* Uploaded Academic Documents Summary */}
+                <div style={{ backgroundColor: '#080e1a', padding: '18px 22px', borderRadius: '14px', marginBottom: '24px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#d8b257', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>
+                    Uploaded Academic Documents on Record:
+                  </div>
+                  <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+                    {trackingResult.ple_pass_slip && (
+                      <a 
+                        href={trackingResult.ple_pass_slip} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#131f37', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        <FileText size={16} color="#d8b257" />
+                        <span>PLE Pass Slip (PDF)</span>
+                        <Eye size={13} color="#d8b257" />
+                      </a>
+                    )}
+                    {trackingResult.recommendation_letter && (
+                      <a 
+                        href={trackingResult.recommendation_letter} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#131f37', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        <FileText size={16} color="#d8b257" />
+                        <span>Former School Recommendation (PDF)</span>
+                        <Eye size={13} color="#d8b257" />
+                      </a>
+                    )}
+                    {trackingResult.uce_pass_slip && (
+                      <a 
+                        href={trackingResult.uce_pass_slip} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#131f37', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        <FileText size={16} color="#d8b257" />
+                        <span>Senior 4 (UCE) Pass Slip (PDF)</span>
+                        <Eye size={13} color="#d8b257" />
+                      </a>
+                    )}
+                    {!trackingResult.ple_pass_slip && !trackingResult.recommendation_letter && !trackingResult.uce_pass_slip && (
+                      <span style={{ fontSize: '13px', color: '#94a3b8' }}>Physical submission verification pending.</span>
+                    )}
                   </div>
                 </div>
 
