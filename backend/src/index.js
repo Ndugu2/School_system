@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
 const cron = require('node-cron');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
@@ -16,6 +17,8 @@ if (!mongoUri) {
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:4173'];
@@ -78,12 +81,13 @@ app.use('/api/exam-results',    require('./routes/examResults'));
 app.use('/api/fees',            require('./routes/fees'));
 
 // ── Phase 1: Foundation Routes ────────────────────────────────────────────────
-app.use('/api/academic-years',  require('./routes/academicYears'));
-app.use('/api/registrations',   require('./routes/registrations'));
-app.use('/api/requirements',    require('./routes/requirements'));
+app.use('/api/academic-years',      require('./routes/academicYears'));
+app.use('/api/registrations',       require('./routes/registrations'));
+app.use('/api/requirements',        require('./routes/requirements'));
+app.use('/api/student-applications', require('./routes/studentApplications'));
 
 // ── Audit Log (read-only, super-admin) ───────────────────────────────────────
-app.use('/api/audit-logs',      require('./routes/auditLogs'));
+app.use('/api/audit-logs',          require('./routes/auditLogs'));
 
 // ── Module Routes (new) ──────────────────────────────────────────────────────
 const financeRoutes = require('./modules/finance/routes/financeRoutes');

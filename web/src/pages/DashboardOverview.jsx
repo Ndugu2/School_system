@@ -190,7 +190,7 @@ export default function DashboardOverview({ setCurrentTab }) {
           <div style={styles.barChartWrap}>
             {feesData.map((item) => (
               <div key={item.label} style={styles.barGroup}>
-                <div style={{ height: `${item.value}%`, ...styles.bar, background: item.value > 48 ? '#67e8d4' : '#facc15' }} />
+                <div style={{ height: `${item.value}%`, ...styles.bar, background: item.value > 48 ? '#67e8d4' : '#c59b27' }} />
                 <span style={styles.barMonth}>{item.label}</span>
               </div>
             ))}
