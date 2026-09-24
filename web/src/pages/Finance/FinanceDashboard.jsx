@@ -12,11 +12,18 @@ import {
 const UGX = (n) => `UGX ${Number(n || 0).toLocaleString()}`;
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-export default function FinanceDashboard({ setActiveFinanceTab }) {
+export default function FinanceDashboard({ setActiveFinanceTab, readOnly = false }) {
   const [summary, setSummary] = useState(null);
   const [cashflow, setCashflow] = useState(null);
   const [loading, setLoading] = useState(true);
   const [year] = useState(new Date().getFullYear());
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -33,12 +40,22 @@ export default function FinanceDashboard({ setActiveFinanceTab }) {
 
   if (loading) return <div style={s.loading}>Loading financial data...</div>;
 
+  const receivablesOutstanding = (summary?.revenue?.breakdown || []).reduce((sum, item) => sum + Math.max((item.totalAmount || 0) - (item.paidAmount || 0), 0), 0);
+
   const revenueCards = [
-    { label: 'Total Revenue', value: UGX(summary?.revenue?.totalRevenue), icon: TrendingUp, color: '#10b981', bg: '#d1fae5' },
-    { label: 'Total Expenses', value: UGX(summary?.expenses?.totalExpenses), icon: TrendingDown, color: '#ef4444', bg: '#fee2e2' },
-    { label: 'Payroll Cost', value: UGX(summary?.payroll?.totalPayroll), icon: Users, color: '#f59e0b', bg: '#fef3c7' },
-    { label: 'Net Position', value: UGX(summary?.netPosition), icon: BarChart2, color: '#4f46e5', bg: '#e0e7ff' },
+    { label: 'Cash Collected', value: UGX(summary?.revenue?.totalRevenue), icon: TrendingUp, color: '#10b981', bg: '#d1fae5' },
+    { label: 'Operating Expenses', value: UGX(summary?.expenses?.totalExpenses), icon: TrendingDown, color: '#ef4444', bg: '#fee2e2' },
+    { label: 'Payroll Liability', value: UGX(summary?.payroll?.totalPayroll), icon: Users, color: '#f59e0b', bg: '#fef3c7' },
+    { label: 'Net Cash Position', value: UGX(summary?.netPosition), icon: BarChart2, color: '#4f46e5', bg: '#e0e7ff' },
   ];
+
+  const receivablesCard = {
+    label: 'Student Fees Receivable',
+    value: UGX(receivablesOutstanding),
+    icon: FileText,
+    color: '#4f46e5',
+    bg: '#e0e7ff',
+  };
 
   const invoiceBreakdown = (summary?.revenue?.breakdown || []).map(b => ({
     name: b._id?.toUpperCase() || 'N/A',
@@ -53,19 +70,19 @@ export default function FinanceDashboard({ setActiveFinanceTab }) {
   }));
 
   return (
-    <div style={s.container}>
+    <div style={{ ...s.container, gap: isMobile ? 16 : 24 }}>
       {/* KPI Cards */}
-      <div style={s.kpiGrid}>
-        {revenueCards.map(card => {
+      <div style={{ ...s.kpiGrid, gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(180px, 1fr))' : 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        {[receivablesCard, ...revenueCards].map(card => {
           const Icon = card.icon;
           return (
             <div key={card.label} style={s.kpiCard}>
-              <div style={{ ...s.kpiIcon, backgroundColor: card.bg }}>
-                <Icon size={22} color={card.color} />
+              <div style={{ ...s.kpiIcon, backgroundColor: card.bg, width: isMobile ? 42 : 48, height: isMobile ? 42 : 48 }}>
+                <Icon size={isMobile ? 18 : 22} color={card.color} />
               </div>
               <div>
                 <p style={s.kpiLabel}>{card.label}</p>
-                <p style={{ ...s.kpiValue, color: card.color }}>{card.value}</p>
+                <p style={{ ...s.kpiValue, color: card.color, fontSize: isMobile ? 16 : 20 }}>{card.value}</p>
               </div>
             </div>
           );
@@ -73,10 +90,10 @@ export default function FinanceDashboard({ setActiveFinanceTab }) {
       </div>
 
       {/* Charts Row */}
-      <div style={s.chartsRow}>
+      <div style={{ ...s.chartsRow, gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(280px, 1fr))' }}>
         {/* Invoice Status Bar Chart */}
-        <div style={s.chartCard}>
-          <h3 style={s.chartTitle}>Invoice Status — {year}</h3>
+        <div style={{ ...s.chartCard, padding: isMobile ? 16 : 24 }}>
+          <h3 style={s.chartTitle}>Student Fee Ledger — {year}</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={invoiceBreakdown}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -90,8 +107,8 @@ export default function FinanceDashboard({ setActiveFinanceTab }) {
         </div>
 
         {/* Expense Pie Chart */}
-        <div style={s.chartCard}>
-          <h3 style={s.chartTitle}>Expense Categories</h3>
+        <div style={{ ...s.chartCard, padding: isMobile ? 16 : 24 }}>
+          <h3 style={s.chartTitle}>Operating Expense Allocation</h3>
           {expensePieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -107,8 +124,8 @@ export default function FinanceDashboard({ setActiveFinanceTab }) {
         </div>
 
         {/* Cash Flow Forecast Graph */}
-        <div style={{ ...s.chartCard, gridColumn: '1 / -1' }}>
-          <h3 style={s.chartTitle}>Smart Cash Flow Projection (Next 3 Months)</h3>
+        <div style={{ ...s.chartCard, gridColumn: '1 / -1', padding: isMobile ? 16 : 24 }}>
+          <h3 style={s.chartTitle}>Cash Flow Forecast (Next 3 Months)</h3>
           {cashflow && cashflow.forecast.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={cashflow.forecast}>
@@ -126,20 +143,20 @@ export default function FinanceDashboard({ setActiveFinanceTab }) {
       </div>
 
       {/* Quick Action Tiles */}
-      <div style={s.quickActions}>
+      <div style={{ ...s.quickActions, gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(160px, 1fr))' : 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         {[
-          { label: 'Generate Invoices', icon: FileText, tab: 'invoices', desc: 'Bulk-generate by grade cohort' },
-          { label: 'Record Payment', icon: CheckCircle, tab: 'invoices', desc: 'Apply payment to an invoice' },
-          { label: 'Run Payroll', icon: Users, tab: 'payroll', desc: 'Process monthly staff salaries' },
-          { label: 'Log Expense', icon: AlertCircle, tab: 'expenses', desc: 'Record operational costs' },
-        ].map(action => {
+          { label: 'Raise School Fees', icon: FileText, tab: 'invoices', desc: 'Generate term fee invoices by class' },
+          { label: 'Post Cash Receipt', icon: CheckCircle, tab: 'invoices', desc: 'Apply student payments to the ledger' },
+          { label: 'Process Payroll', icon: Users, tab: 'payroll', desc: 'Prepare monthly staff settlement' },
+          { label: 'Approve Expenditure', icon: AlertCircle, tab: 'expenses', desc: 'Review and authorize vendor claims' },
+        ].filter(action => !readOnly || ['invoices'].includes(action.tab)).map(action => {
           const Icon = action.icon;
           return (
-            <button key={action.label} style={s.actionTile} onClick={() => setActiveFinanceTab(action.tab)}>
-              <div style={s.actionIcon}><Icon size={20} color="var(--primary)" /></div>
+            <button key={action.label} style={{ ...s.actionTile, padding: isMobile ? 12 : 18, gap: isMobile ? 10 : 14 }} onClick={() => setActiveFinanceTab(action.tab)}>
+              <div style={s.actionIcon}><Icon size={isMobile ? 18 : 20} color="var(--primary)" /></div>
               <div>
-                <p style={s.actionLabel}>{action.label}</p>
-                <p style={s.actionDesc}>{action.desc}</p>
+                <p style={{ ...s.actionLabel, fontSize: isMobile ? 13 : 14 }}>{action.label}</p>
+                <p style={{ ...s.actionDesc, fontSize: isMobile ? 10 : 11 }}>{action.desc}</p>
               </div>
             </button>
           );

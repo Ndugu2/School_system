@@ -126,7 +126,7 @@ const styles = {
   secondaryButton: { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 11px', border: '1px solid #dbe4ef', borderRadius: 8, background: '#fff', color: '#2563eb', fontWeight: 700, cursor: 'pointer' },
   message: { padding: '11px 14px', border: '1px solid #bbf7d0', borderRadius: 9, background: '#f0fdf4', color: '#166534', fontSize: 13 },
   error: { padding: '11px 14px', border: '1px solid #fecaca', borderRadius: 9, background: '#fef2f2', color: '#991b1b', fontSize: 13 },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 },
+  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 },
   stat: { display: 'flex', alignItems: 'center', gap: 12, padding: 17, background: '#fff', border: '1px solid #e1e8f0', borderRadius: 13, boxShadow: '0 5px 18px rgba(31, 53, 82, 0.06)' },
   statContent: { display: 'flex', flexDirection: 'column', gap: 4 },
   statLabel: { color: '#68778d', fontSize: 12 },

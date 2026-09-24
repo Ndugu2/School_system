@@ -6,6 +6,7 @@ const UGX = (n) => `UGX ${Number(n || 0).toLocaleString()}`;
 const CLASSES = ['Nursery','P1','P2','P3','P4','P5','P6','P7','S1','S2','S3','S4','S5','S6'];
 const TERMS = ['Term 1','Term 2','Term 3'];
 const YEAR = new Date().getFullYear();
+const YEARS = [YEAR, YEAR - 1, YEAR - 2];
 
 const statusConfig = {
   paid:    { color: '#10b981', bg: '#d1fae5', icon: CheckCircle,  label: 'Paid' },
@@ -15,13 +16,21 @@ const statusConfig = {
   waived:  { color: '#94a3b8', bg: '#f1f5f9', icon: XCircle,      label: 'Waived' },
 };
 
-export default function InvoiceManager() {
+export default function InvoiceManager({ readOnly = false }) {
   const [invoices, setInvoices] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterTerm, setFilterTerm] = useState('');
+  const [filterYear, setFilterYear] = useState(String(YEAR));
   const [search, setSearch] = useState('');
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Generate modal state
   const [showGenModal, setShowGenModal] = useState(false);
@@ -40,6 +49,7 @@ export default function InvoiceManager() {
       const params = new URLSearchParams({ limit: 100 });
       if (filterStatus) params.append('status', filterStatus);
       if (filterTerm) params.append('term', filterTerm);
+      if (filterYear) params.append('academicYear', filterYear);
       const data = await api.get(`/finance/invoices?${params}`);
       setInvoices(data.invoices || []);
       setTotal(data.total || 0);
@@ -47,7 +57,7 @@ export default function InvoiceManager() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchInvoices(); }, [filterStatus, filterTerm]);
+  useEffect(() => { fetchInvoices(); }, [filterStatus, filterTerm, filterYear]);
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -87,42 +97,46 @@ export default function InvoiceManager() {
   });
 
   return (
-    <div style={s.container}>
+    <div style={{ ...s.container, gap: isMobile ? 16 : 20 }}>
       {/* Header */}
-      <div style={s.header}>
+      <div style={{ ...s.header, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'flex-start' }}>
         <div>
-          <h2 style={s.title}>Invoices & Payments</h2>
-          <p style={s.subtitle}>{total} total invoices</p>
+          <h2 style={s.title}>Student Fees Receivables</h2>
+          <p style={s.subtitle}>{total} fee accounts in the receivables ledger</p>
         </div>
-        <button style={s.primaryBtn} onClick={() => setShowGenModal(true)}>
-          <Plus size={16} /> Generate Invoices
-        </button>
+        {!readOnly && <button style={s.primaryBtn} onClick={() => setShowGenModal(true)}>
+          <Plus size={16} /> Raise Fees Invoices
+        </button>}
       </div>
 
       {/* Filters */}
-      <div style={s.filterBar}>
+      <div style={{ ...s.filterBar, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(200px, 1.5fr) repeat(3, minmax(140px, 1fr))' }}>
         <div style={s.searchWrap}>
           <Search size={16} style={s.searchIcon} />
-          <input style={s.searchInput} placeholder="Search by student or invoice number…" value={search} onChange={e => setSearch(e.target.value)} />
+          <input style={s.searchInput} placeholder="Search account holder or invoice number…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <select style={s.select} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="">All Statuses</option>
+          <option value="">All Ledger Statuses</option>
           {Object.entries(statusConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
         <select style={s.select} value={filterTerm} onChange={e => setFilterTerm(e.target.value)}>
-          <option value="">All Terms</option>
+          <option value="">All Academic Terms</option>
           {TERMS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select style={s.select} value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+          <option value="">All Academic Years</option>
+          {YEARS.map(year => <option key={year} value={year}>{year}</option>)}
         </select>
       </div>
 
       {/* Table */}
-      <div style={s.tableWrap}>
+      <div style={{ ...s.tableWrap, overflowX: 'auto' }}>
         {loading ? (
           <div style={s.empty}>Loading invoices…</div>
         ) : filtered.length === 0 ? (
           <div style={s.empty}>No invoices found. Generate invoices by clicking the button above.</div>
         ) : (
-          <table style={s.table}>
+          <table style={{ ...s.table, minWidth: isMobile ? 720 : 900 }}>
             <thead>
               <tr style={s.thead}>
                 {['Invoice #','Student','Class','Term','Total','Paid','Balance','Status','Action'].map(h => (
@@ -150,7 +164,7 @@ export default function InvoiceManager() {
                     </td>
                     <td style={s.td}>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        {inv.status !== 'paid' && inv.status !== 'waived' && (
+                        {!readOnly && inv.status !== 'paid' && inv.status !== 'waived' && (
                           <>
                             <button style={s.payBtn} onClick={() => { setPayModal(inv); setPayAmount(String(inv.balance)); }}>
                               Pay
@@ -173,27 +187,27 @@ export default function InvoiceManager() {
       {/* Generate Modal */}
       {showGenModal && (
         <div style={s.overlay}>
-          <div style={s.modal}>
+          <div style={{ ...s.modal, maxWidth: isMobile ? 'min(100%, 420px)' : 480, padding: isMobile ? 18 : 28 }}>
             <div style={s.modalHeader}>
-              <h3 style={s.modalTitle}>Generate Bulk Invoices</h3>
+              <h3 style={s.modalTitle}>Generate School Fee Invoices</h3>
               <button style={s.closeBtn} onClick={() => setShowGenModal(false)}><X size={18} /></button>
             </div>
             <form onSubmit={handleGenerate} style={s.form}>
-              <label style={s.label}>Class Level</label>
+              <label style={s.label}>Student Class</label>
               <select style={s.input} value={genForm.classLevel} onChange={e => setGenForm({...genForm, classLevel: e.target.value})}>
                 {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <label style={s.label}>Term</label>
+              <label style={s.label}>Academic Term</label>
               <select style={s.input} value={genForm.term} onChange={e => setGenForm({...genForm, term: e.target.value})}>
                 {TERMS.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-              <label style={s.label}>Academic Year</label>
+              <label style={s.label}>Financial Year</label>
               <input type="number" style={s.input} value={genForm.academicYear} onChange={e => setGenForm({...genForm, academicYear: parseInt(e.target.value)})} />
-              <label style={s.label}>Payment Due Date</label>
+              <label style={s.label}>Due Date</label>
               <input type="date" required style={s.input} value={genForm.dueDate} onChange={e => setGenForm({...genForm, dueDate: e.target.value})} />
-              <p style={s.hint}>⚡ Invoices will be auto-generated from the fee structure for {genForm.classLevel}. Students already having an invoice for this term will be skipped.</p>
+              <p style={s.hint}>⚡ Fee invoices will be auto-generated from the approved fee structure for {genForm.classLevel}. Students with an existing account for this term will be skipped.</p>
               <button type="submit" style={s.primaryBtn} disabled={genLoading}>
-                {genLoading ? 'Generating…' : 'Generate Invoices'}
+                {genLoading ? 'Generating…' : 'Raise Fee Invoices'}
               </button>
             </form>
           </div>
@@ -203,23 +217,23 @@ export default function InvoiceManager() {
       {/* Payment Modal */}
       {payModal && (
         <div style={s.overlay}>
-          <div style={s.modal}>
+          <div style={{ ...s.modal, maxWidth: isMobile ? 'min(100%, 420px)' : 480, padding: isMobile ? 18 : 28 }}>
             <div style={s.modalHeader}>
-              <h3 style={s.modalTitle}>Record Payment — {payModal.invoiceNumber}</h3>
+              <h3 style={s.modalTitle}>Post Cash Receipt — {payModal.invoiceNumber}</h3>
               <button style={s.closeBtn} onClick={() => setPayModal(null)}><X size={18} /></button>
             </div>
             <div style={s.form}>
               <div style={s.balanceRow}>
-                <span style={s.label}>Outstanding Balance</span>
+                <span style={s.label}>Outstanding Receivable</span>
                 <span style={{ color: '#ef4444', fontWeight: 800, fontSize: 18 }}>{UGX(payModal.balance)}</span>
               </div>
-              <label style={s.label}>Amount Paid (UGX)</label>
+              <label style={s.label}>Receipt Amount (UGX)</label>
               <input type="number" style={s.input} value={payAmount} onChange={e => setPayAmount(e.target.value)} />
-              <label style={s.label}>Payment Method</label>
+              <label style={s.label}>Settlement Method</label>
               <select style={s.input} value={payMethod} onChange={e => setPayMethod(e.target.value)}>
                 {['MTN Mobile Money','Airtel Money','Bank Deposit','Cash','Card'].map(m => <option key={m} value={m}>{m}</option>)}
               </select>
-              <label style={s.label}>Transaction Reference</label>
+              <label style={s.label}>Receipt Reference</label>
               <input type="text" placeholder="e.g. MTN-REF-12345" style={s.input} value={payRef} onChange={e => setPayRef(e.target.value)} />
               <button style={s.primaryBtn} onClick={handlePay}>Confirm Payment</button>
             </div>

@@ -5,7 +5,7 @@ import { Users, Plus, CheckCircle, Clock, X, Wallet } from 'lucide-react';
 const UGX = (n) => `UGX ${Number(n || 0).toLocaleString()}`;
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-export default function PayrollManager() {
+export default function PayrollManager({ readOnly = false }) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
@@ -84,9 +84,9 @@ export default function PayrollManager() {
           <select style={s.select} value={filterMonth} onChange={e => setFilterMonth(parseInt(e.target.value))}>
             {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
           </select>
-          <button style={s.primaryBtn} onClick={() => setShowModal(true)}>
+          {!readOnly && <button style={s.primaryBtn} onClick={() => setShowModal(true)}>
             <Plus size={16} /> Add Payroll Entry
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -135,7 +135,7 @@ export default function PayrollManager() {
                     </span>
                   </td>
                   <td style={s.td}>
-                    {r.status !== 'processed' && (
+                    {!readOnly && r.status !== 'processed' && (
                       <button style={s.processBtn} onClick={() => handleProcess(r._id)} disabled={processing === r._id}>
                         {processing === r._id ? '…' : 'Process'}
                       </button>

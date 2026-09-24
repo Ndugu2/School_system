@@ -1,27 +1,33 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import FinanceDashboard from './FinanceDashboard';
+import AccountingCenter from './AccountingCenter';
 import InvoiceManager from './InvoiceManager';
 import PayrollManager from './PayrollManager';
 import ExpenseTracker from './ExpenseTracker';
-import { BarChart2, FileText, Users, Receipt } from 'lucide-react';
+import { BarChart2, FileText, Landmark, Users, Receipt } from 'lucide-react';
 
 const tabs = [
-  { id: 'overview',  label: 'Overview',  icon: BarChart2 },
-  { id: 'invoices',  label: 'Invoices',  icon: FileText  },
-  { id: 'payroll',   label: 'Payroll',   icon: Users     },
-  { id: 'expenses',  label: 'Expenses',  icon: Receipt   },
+  { id: 'overview',  label: 'Financial Overview',  icon: BarChart2 },
+  { id: 'accounting', label: 'Accounting Center', icon: Landmark },
+  { id: 'invoices',  label: 'Receivables Ledger',  icon: FileText  },
+  { id: 'payroll',   label: 'Payroll Ledger',   icon: Users     },
+  { id: 'expenses',  label: 'Payables Ledger',  icon: Receipt   },
 ];
 
 export default function Finance() {
+  const { user } = useAuth();
+  const readOnly = user?.role === 'headteacher';
   const [activeTab, setActiveTab] = useState('overview');
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'overview':  return <FinanceDashboard setActiveFinanceTab={setActiveTab} />;
-      case 'invoices':  return <InvoiceManager />;
-      case 'payroll':   return <PayrollManager />;
-      case 'expenses':  return <ExpenseTracker />;
-      default:          return <FinanceDashboard setActiveFinanceTab={setActiveTab} />;
+      case 'overview':  return <FinanceDashboard setActiveFinanceTab={setActiveTab} readOnly={readOnly} />;
+      case 'accounting': return <AccountingCenter readOnly={readOnly} />;
+      case 'invoices':  return <InvoiceManager readOnly={readOnly} />;
+      case 'payroll':   return <PayrollManager readOnly={readOnly} />;
+      case 'expenses':  return <ExpenseTracker readOnly={readOnly} />;
+      default:          return <FinanceDashboard setActiveFinanceTab={setActiveTab} readOnly={readOnly} />;
     }
   };
 
@@ -44,6 +50,7 @@ export default function Finance() {
           );
         })}
       </div>
+      {readOnly && <div style={s.readOnlyNotice}>Read-only finance view. Posting, approvals, and edits are restricted to the Finance Manager and administrators.</div>}
       <div className="animate-fade-in">{renderTab()}</div>
     </div>
   );
@@ -70,5 +77,14 @@ const s = {
     backgroundColor: 'var(--primary)',
     color: '#fff',
     boxShadow: '0 2px 8px rgba(99,102,241,0.35)',
+  },
+  readOnlyNotice: {
+    padding: '10px 14px',
+    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+    border: '1px solid #bfdbfe',
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: 600,
   },
 };

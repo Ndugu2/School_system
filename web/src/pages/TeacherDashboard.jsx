@@ -67,7 +67,7 @@ export default function TeacherDashboard({ setCurrentTab }) {
       <section style={styles.grid}>
         <div style={styles.panel}>
           <div style={styles.panelHeader}><div><p style={styles.eyebrow}>Teaching load</p><h2 style={styles.panelTitle}>Assigned classes</h2></div><button style={styles.linkButton} onClick={() => navigateTo('classes')}>View classes <ArrowRight size={15} /></button></div>
-          {data.classes.length === 0 ? <div style={styles.empty}>No classes assigned yet.</div> : (
+          {loading ? <div style={styles.empty}>Loading assigned classes...</div> : data.classes.length === 0 ? <div style={styles.empty}>No classes assigned yet.</div> : (
             <div style={styles.classList}>
               {data.classes.slice(0, 5).map((classItem) => (
                 <button key={classItem._id} style={styles.classRow} onClick={() => navigateTo('attendance')}>
@@ -82,8 +82,8 @@ export default function TeacherDashboard({ setCurrentTab }) {
 
         <div style={styles.panel}>
           <div style={styles.panelHeader}><div><p style={styles.eyebrow}>Assessment centre</p><h2 style={styles.panelTitle}>Marking progress</h2></div><GraduationCap size={22} color="#2563eb" /></div>
-          <div style={styles.progressTrack}><div style={{ ...styles.progressFill, width: `${data.results.length ? Math.round((publishedResults / data.results.length) * 100) : 0}%` }} /></div>
-          <div style={styles.progressMeta}><span>{publishedResults} published</span><span>{draftResults} drafts</span></div>
+          <div style={styles.progressTrack}><div style={{ ...styles.progressFill, width: `${loading ? 0 : data.results.length ? Math.round((publishedResults / data.results.length) * 100) : 0}%` }} /></div>
+          <div style={styles.progressMeta}><span>{loading ? '...' : publishedResults} published</span><span>{loading ? '...' : draftResults} drafts</span></div>
           <p style={styles.helper}>Enter BOT, MOT, and EOT marks, then submit completed work for review.</p>
           <button style={styles.primaryButton} onClick={() => navigateTo('grades')}>Open mark entry <ArrowRight size={16} /></button>
         </div>
@@ -95,7 +95,7 @@ export default function TeacherDashboard({ setCurrentTab }) {
         <button style={styles.actionButton} onClick={() => navigateTo('lms')}><BookOpen size={18} /><span><strong>Learning materials</strong><small>Open course resources</small></span><ArrowRight size={16} /></button>
       </section>
 
-      <section style={styles.notice}><CheckCircle2 size={18} color="#0f9f79" /><span>Attendance is at {attendanceRate}% for the current week.</span><button onClick={() => navigateTo('reports')}>View reports</button></section>
+      <section style={styles.notice}><CheckCircle2 size={18} color="#0f9f79" /><span>{loading ? 'Loading attendance data...' : `Attendance is at ${attendanceRate}% for the current week.`}</span><button onClick={() => navigateTo('reports')}>View reports</button></section>
     </div>
   );
 }
