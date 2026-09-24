@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { api, API_URL } from '../services/api';
 
 const getUgandaGrade = (marks) => {
   if (marks >= 80) return 'D1';
@@ -26,6 +26,9 @@ export default function Grades() {
   const [activeReportStudent, setActiveReportStudent] = useState(null);
   const [reportCardData, setReportCardData] = useState(null);
   const [examStatus, setExamStatus] = useState('DRAFT'); // 'DRAFT' | 'UNDER_REVIEW' | 'APPROVED_LOCKED'
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const isReviewer = ['super-admin', 'admin', 'academic-admin', 'hod'].includes(currentUser.role);
 
   const fetchClasses = async () => {
     try {
@@ -64,6 +67,11 @@ export default function Grades() {
       const query = `/exam-results?class=${selectedClassId}&term=${term}&academicYear=${new Date().getFullYear()}`;
       const response = await api.get(query);
       const existingGrades = response.results || [];
+      const selectedResults = existingGrades.filter(g => !selectedSubjectId || g.subject?._id === selectedSubjectId);
+      const statuses = selectedResults.map(result => result.approvalStatus);
+      if (statuses.includes('published')) setExamStatus('APPROVED_LOCKED');
+      else if (statuses.includes('submitted') || statuses.includes('hod-approved')) setExamStatus('UNDER_REVIEW');
+      else setExamStatus('DRAFT');
 
       const dataMap = {};
       studs.forEach(s => {
@@ -145,6 +153,67 @@ export default function Grades() {
     }
   };
 
+  const handleDownloadReportCard = async () => {
+    if (!activeReportStudent) return;
+    try {
+      const apiUrl = API_URL;
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${apiUrl}/grades/report-card/${activeReportStudent._id}/${encodeURIComponent(term)}/pdf?academicYear=${new Date().getFullYear()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) throw new Error('Unable to download report card');
+      const blobUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `report-card-${activeReportStudent.studentId || activeReportStudent._id}.pdf`;
+      link.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      alert(err.message || 'Failed to download report card');
+    }
+  };
+
+  const workflowPayload = {
+    class: selectedClassId,
+    subject: selectedSubjectId,
+    term,
+    academicYear: new Date().getFullYear(),
+  };
+
+  const submitForReview = async () => {
+    setWorkflowBusy(true);
+    try {
+      await api.patch('/exam-results/submit-review', workflowPayload);
+      setExamStatus('UNDER_REVIEW');
+      await fetchStudentsAndGrades();
+    } catch (err) {
+      alert(err.message || 'Failed to submit marks for review');
+    } finally { setWorkflowBusy(false); }
+  };
+
+  const returnForRevision = async () => {
+    setWorkflowBusy(true);
+    try {
+      await api.patch('/exam-results/return-revision', workflowPayload);
+      setExamStatus('DRAFT');
+      await fetchStudentsAndGrades();
+    } catch (err) {
+      alert(err.message || 'Failed to return marks for revision');
+    } finally { setWorkflowBusy(false); }
+  };
+
+  const approveAndPublish = async () => {
+    setWorkflowBusy(true);
+    try {
+      await api.patch('/exam-results/approve-hod', workflowPayload);
+      await api.patch('/exam-results/publish', workflowPayload);
+      setExamStatus('APPROVED_LOCKED');
+      await fetchStudentsAndGrades();
+    } catch (err) {
+      alert(err.message || 'Failed to approve and publish marks');
+    } finally { setWorkflowBusy(false); }
+  };
+
   return (
     <div style={styles.container}>
       {/* Control Panel */}
@@ -220,7 +289,8 @@ export default function Grades() {
         <div style={{ display: 'flex', gap: 8 }}>
           {examStatus === 'DRAFT' && (
             <button
-              onClick={() => setExamStatus('UNDER_REVIEW')}
+              onClick={submitForReview}
+              disabled={workflowBusy || isReviewer}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', backgroundColor: '#4f46e5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
             >
               <ShieldCheck size={15} /> Submit for HOD Review
@@ -228,18 +298,20 @@ export default function Grades() {
           )}
           {examStatus === 'UNDER_REVIEW' && (
             <>
-              <button
-                onClick={() => setExamStatus('DRAFT')}
+              {isReviewer && <button
+                onClick={returnForRevision}
+                disabled={workflowBusy}
                 style={{ padding: '8px 14px', backgroundColor: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
               >
                 Return to Teacher (Revision)
-              </button>
-              <button
-                onClick={() => setExamStatus('APPROVED_LOCKED')}
+              </button>}
+              {isReviewer && <button
+                onClick={approveAndPublish}
+                disabled={workflowBusy}
                 style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >
                 <Lock size={15} /> Approve & Lock Marks
-              </button>
+              </button>}
             </>
           )}
           {examStatus === 'APPROVED_LOCKED' && (
@@ -419,8 +491,8 @@ export default function Grades() {
             </div>
             
             <div style={styles.modalFooter}>
-              <button onClick={() => window.print()} style={styles.printBtn}>
-                Print / Download PDF
+              <button onClick={handleDownloadReportCard} style={styles.printBtn}>
+                Download PDF
               </button>
               <button onClick={() => setShowReportModal(false)} style={styles.closeModalBtn}>
                 Close

@@ -18,10 +18,67 @@ router.get('/staff', protect, authorize('super-admin', 'admin'), async (req, res
     if (contractType) query.contractType = contractType;
     if (isActive !== 'all') query.isActive = isActive === 'true';
 
-    const staff = await StaffProfile.find(query)
+    const profiles = await StaffProfile.find(query)
       .populate('user', 'name email role avatar')
       .sort({ createdAt: -1 });
-    res.json(staff);
+
+    const staffRoles = [
+      'super-admin', 'admin', 'headteacher', 'hod', 'director-of-studies',
+      'supervisor', 'deputy-head', 'bursar', 'inventory-manager',
+      'registrar', 'academic-admin', 'class-teacher', 'teacher',
+    ];
+    const profileUserIds = new Set(profiles.map(profile => String(profile.user?._id)));
+    const userQuery = {
+      role: { $in: staffRoles },
+      ...(isActive !== 'all' ? { isActive: isActive === 'true' } : {}),
+    };
+    const users = await User.find(userQuery, 'name email role avatar isActive').sort({ name: 1 });
+    const roleLabels = {
+      'super-admin': 'Super Admin',
+      admin: 'Admin',
+      headteacher: 'Head Teacher',
+      'director-of-studies': 'Director of Studies',
+      supervisor: 'Supervisor',
+      'deputy-head': 'Deputy Head Teacher',
+      bursar: 'Finance Manager',
+      'inventory-manager': 'Inventory Manager',
+      registrar: 'Registrar',
+      'academic-admin': 'Academic Administrator',
+      'class-teacher': 'Class Teacher',
+      teacher: 'Teacher',
+    };
+    const profileResults = profiles.map(profile => ({
+      _id: profile._id,
+      source: 'profile',
+      user: profile.user,
+      name: profile.user?.name || '',
+      email: profile.user?.email || '',
+      role: profile.position || roleLabels[profile.user?.role] || profile.user?.role || '',
+      department: profile.department || 'N/A',
+      qualification: profile.qualifications?.[0]?.degree || '',
+      phone: profile.phone || '',
+      status: profile.isActive ? 'active' : 'inactive',
+      subjects: [],
+      joinDate: profile.contractStart || profile.createdAt,
+    }));
+    const userResults = users
+      .filter(user => !profileUserIds.has(String(user._id)))
+      .map(user => ({
+        _id: user._id,
+        source: 'user',
+        user,
+        name: user.name,
+        email: user.email,
+        role: roleLabels[user.role] || user.role,
+        department: 'N/A',
+        qualification: '',
+        phone: '',
+        status: user.isActive ? 'active' : 'inactive',
+        subjects: [],
+        joinDate: user.createdAt,
+      }));
+
+    res.json([...profileResults, ...userResults]);
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
   }

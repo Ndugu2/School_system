@@ -2,18 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { Users, Search, Plus, Edit2, Trash2, GraduationCap, Phone, Mail, Shield, X, Save } from 'lucide-react';
 
-const ROLES = ['Head Teacher', 'Deputy Head Teacher', 'Head of Department', 'Teacher', 'Registrar', 'Finance Manager', 'Librarian', 'Laboratory Technician', 'Counsellor', 'Security', 'Support Staff'];
+const ROLES = ['Admin', 'Head Teacher', 'Deputy Head Teacher', 'Director of Studies', 'Supervisor', 'Teacher', 'Registrar', 'Finance Manager', 'Inventory Manager', 'Academic Administrator', 'Class Teacher'];
 const DEPTS = ['Sciences', 'Humanities', 'Languages', 'Mathematics', 'Technical', 'Administration', 'Finance', 'N/A'];
 const QUALIFICATIONS = ["Certificate", "Diploma", "Bachelor's Degree", "Post Graduate Diploma", "Master's Degree", "PhD"];
-
-const MOCK_STAFF = [
-  { _id: '1', name: 'Okello James', role: 'Head Teacher', department: 'Administration', qualification: "Master's Degree", phone: '0772123456', email: 'okello@ndugu.ac.ug', status: 'active', joinDate: '2018-01-15', subjects: [] },
-  { _id: '2', name: 'Nakato Sarah', role: 'Teacher', department: 'Sciences', qualification: "Bachelor's Degree", phone: '0752987654', email: 'nakato@ndugu.ac.ug', status: 'active', joinDate: '2020-02-01', subjects: ['Biology', 'Chemistry'] },
-  { _id: '3', name: 'Mugisha Peter', role: 'Teacher', department: 'Mathematics', qualification: "Bachelor's Degree", phone: '0701234567', email: 'mugisha@ndugu.ac.ug', status: 'active', joinDate: '2019-08-20', subjects: ['Mathematics', 'Physics'] },
-  { _id: '4', name: 'Nakazibwe Grace', role: 'Finance Manager', department: 'Finance', qualification: "Diploma", phone: '0784563210', email: 'nakazibwe@ndugu.ac.ug', status: 'active', joinDate: '2021-03-10', subjects: [] },
-  { _id: '5', name: 'Wasswa Robert', role: 'Librarian', department: 'N/A', qualification: "Diploma", phone: '0712098765', email: 'wasswa@ndugu.ac.ug', status: 'active', joinDate: '2022-06-01', subjects: [] },
-  { _id: '6', name: 'Amara Christine', role: 'Teacher', department: 'Humanities', qualification: "Bachelor's Degree", phone: '0709876543', email: 'amara@ndugu.ac.ug', status: 'on_leave', joinDate: '2017-04-15', subjects: ['History', 'Geography'] },
-];
+const ROLE_VALUES = {
+  Admin: 'admin',
+  'Head Teacher': 'headteacher',
+  'Deputy Head Teacher': 'deputy-head',
+  'Director of Studies': 'director-of-studies',
+  Supervisor: 'supervisor',
+  Teacher: 'teacher',
+  Registrar: 'registrar',
+  'Finance Manager': 'bursar',
+  'Inventory Manager': 'inventory-manager',
+  'Academic Administrator': 'academic-admin',
+  'Class Teacher': 'class-teacher',
+};
 
 const emptyForm = { name: '', role: 'Teacher', department: 'Sciences', qualification: "Bachelor's Degree", phone: '', email: '', subjects: '', joinDate: '', status: 'active' };
 
@@ -28,7 +32,7 @@ export default function StaffDirectory() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.get('/hr/staff').then(setStaff).catch(() => setStaff(MOCK_STAFF)).finally(() => setLoading(false));
+    api.get('/hr/staff').then(setStaff).catch(() => setStaff([])).finally(() => setLoading(false));
   }, []);
 
   const filtered = staff.filter(s => {
@@ -51,22 +55,26 @@ export default function StaffDirectory() {
     const payload = { ...form, subjects: form.subjects ? form.subjects.split(',').map(s => s.trim()).filter(Boolean) : [] };
     try {
       if (editId) {
-        await api.put(`/hr/staff/${editId}`, payload);
+        if (form.source === 'user') {
+          await api.put(`/auth/${editId}`, { name: form.name, email: form.email, role: ROLE_VALUES[form.role] || 'teacher', isActive: form.status === 'active' });
+        } else {
+          await api.put(`/hr/staff/${editId}`, payload);
+        }
         setStaff(prev => prev.map(s => s._id === editId ? { ...s, ...payload } : s));
       } else {
-        const created = await api.post('/hr/staff', payload).catch(() => ({ ...payload, _id: Date.now().toString() }));
-        setStaff(prev => [...prev, created]);
+        const created = await api.post('/auth', { name: form.name, email: form.email, role: ROLE_VALUES[form.role] || 'teacher', isActive: form.status === 'active' });
+        const staffMember = { ...payload, _id: created.id, source: 'user' };
+        setStaff(prev => [...prev, staffMember]);
       }
-    } catch {
-      if (!editId) setStaff(prev => [...prev, { ...payload, _id: Date.now().toString() }]);
-    }
+    } catch {}
     setShowModal(false);
     setSaving(false);
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Remove this staff member?')) return;
-    try { await api.delete(`/hr/staff/${id}`); } catch {}
+    const member = staff.find(s => s._id === id);
+    try { await api.delete(`/${member?.source === 'user' ? 'auth' : 'hr/staff'}/${id}`); } catch {}
     setStaff(prev => prev.filter(s => s._id !== id));
   };
 

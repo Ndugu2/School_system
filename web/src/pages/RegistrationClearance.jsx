@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import ClassPermitsTab from './AdminPortal/ClassPermitsTab';
 import { 
   CheckCircle, Clock, AlertTriangle, XCircle, ArrowRight, 
   UserCheck, ShieldCheck, FileCheck, RefreshCw, Send, 
-  GraduationCap, MoveRight, LogOut, Filter, ChevronRight, User
+  GraduationCap, MoveRight, LogOut, Filter, ChevronRight, User, Award
 } from 'lucide-react';
 
 export default function RegistrationClearance({ onBackToDirectory }) {
@@ -220,6 +221,12 @@ export default function RegistrationClearance({ onBackToDirectory }) {
           style={{ ...styles.tabBtn, ...(activeTab === 'lifecycle' ? styles.activeTabBtn : {}) }}
         >
           <GraduationCap size={18} /> 3. Promotions, Transfers & Alumni
+        </button>
+        <button 
+          onClick={() => setActiveTab('permits')}
+          style={{ ...styles.tabBtn, ...(activeTab === 'permits' ? styles.activeTabBtn : {}) }}
+        >
+          <Award size={18} /> 4. Class Entry Permits (PER-xxxx)
         </button>
       </div>
 
@@ -587,6 +594,11 @@ export default function RegistrationClearance({ onBackToDirectory }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB 4: LICOKA CLASS ENTRY PERMITS */}
+      {activeTab === 'permits' && (
+        <ClassPermitsTab />
       )}
 
       {/* TRANSFER CLEARANCE MODAL */}

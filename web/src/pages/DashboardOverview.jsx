@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Bell, Search, CalendarCheck2, Plus, TrendingUp, Users, BriefcaseBusiness, GraduationCap, BookOpen, BadgeDollarSign, Clock3, ArrowUpRight } from 'lucide-react';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function DashboardOverview({ setCurrentTab }) {
+  const { user } = useAuth();
+  const isFinanceManager = user?.role === 'bursar';
   const [searchTerm, setSearchTerm] = useState('');
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [chartMode, setChartMode] = useState('Weekly');
@@ -42,13 +45,21 @@ export default function DashboardOverview({ setCurrentTab }) {
 
   const formatCurrency = (amount) => amount === null ? '...' : `UGX ${Number(amount || 0).toLocaleString('en-UG')}`;
   const formatStat = (value, suffix = '') => value === null ? '...' : `${value}${suffix}`;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const firstName = user?.name?.trim()?.split(' ')[0] || 'there';
+  const roleLabel = user?.role === 'bursar' ? 'Finance Manager' : user?.role ? user.role.replace(/-/g, ' ') : 'school team';
 
   const navigateTo = (tab) => {
     setShowQuickActions(false);
     setCurrentTab(tab);
   };
 
-  const searchTargets = [
+  const searchTargets = isFinanceManager ? [
+    { label: 'Fees & Invoices', tab: 'fees', icon: BadgeDollarSign },
+    { label: 'Finance & ERP', tab: 'finance', icon: TrendingUp },
+    { label: 'School Messages', tab: 'messages', icon: Bell },
+  ] : [
     { label: 'Students', tab: 'students', icon: Users },
     { label: 'Teachers', tab: 'teachers', icon: BriefcaseBusiness },
     { label: 'Classes & Subjects', tab: 'classes', icon: BookOpen },
@@ -61,11 +72,14 @@ export default function DashboardOverview({ setCurrentTab }) {
     const query = searchTerm.trim().toLowerCase();
     return query ? searchTargets.filter((target) => target.label.toLowerCase().includes(query)) : [];
   }, [searchTerm]);
-  const overviewStats = [
-    { label: 'Total Students', value: formatStat(dashboardStats.students), delta: 'Live enrollment', accent: '#7c8cff' },
-    { label: 'Average Attendance', value: formatStat(dashboardStats.attendance, '%'), delta: 'Today', accent: '#6ee7c8' },
-    { label: 'Fees Collected (UGX)', value: formatCurrency(dashboardStats.fees), delta: 'Term 1 total', accent: '#fbbf24' },
-    { label: 'Classes Today', value: formatStat(dashboardStats.classes), delta: 'configured classes', accent: '#5bc0ff' },
+  const overviewStats = isFinanceManager ? [
+    { label: 'Fees Collected (UGX)', value: formatCurrency(dashboardStats.fees), delta: 'Term 1 total', accent: '#fbbf24', tab: 'fees' },
+    { label: 'Receivables Ledger', value: 'Open ledger', delta: 'Invoices and balances', accent: '#7c8cff', tab: 'finance' },
+  ] : [
+    { label: 'Total Students', value: formatStat(dashboardStats.students), delta: 'Live enrollment', accent: '#7c8cff', tab: 'students' },
+    { label: 'Average Attendance', value: formatStat(dashboardStats.attendance, '%'), delta: 'Today', accent: '#6ee7c8', tab: 'attendance' },
+    { label: 'Fees Collected (UGX)', value: formatCurrency(dashboardStats.fees), delta: 'Term 1 total', accent: '#fbbf24', tab: 'fees' },
+    { label: 'Classes Today', value: formatStat(dashboardStats.classes), delta: 'configured classes', accent: '#5bc0ff', tab: 'classes' },
   ];
 
   const attendanceData = [
@@ -98,9 +112,9 @@ export default function DashboardOverview({ setCurrentTab }) {
   ];
 
   return (
-    <div style={styles.dashboardShell}>
-      <div style={styles.topBar}>
-        <div style={styles.searchWrap}>
+    <div className="dashboard-shell" style={styles.dashboardShell}>
+      <div className="dashboard-top-bar" style={styles.topBar}>
+        <div className="dashboard-search-wrap" style={styles.searchWrap}>
           <div style={styles.searchBox}>
             <Search size={18} color="#9aa7bd" />
             <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search modules" aria-label="Search dashboard modules" style={styles.searchInput} />
@@ -112,29 +126,41 @@ export default function DashboardOverview({ setCurrentTab }) {
             })}
           </div>}
         </div>
-        <div style={styles.topActions}>
+        <div className="dashboard-top-actions" style={styles.topActions}>
           <div style={styles.quickActionWrap}>
             <button style={styles.iconBtn} onClick={() => setShowQuickActions((visible) => !visible)} aria-label="Open quick actions"><Plus size={18} /></button>
             {showQuickActions && <div style={styles.quickActions}>
-              <button onClick={() => navigateTo('students')}>Add student</button>
-              <button onClick={() => navigateTo('attendance')}>Take attendance</button>
+              {isFinanceManager && <button onClick={() => navigateTo('finance')}>Open finance ledger</button>}
+              {!isFinanceManager && <>
+                <button onClick={() => navigateTo('students')}>Add student</button>
+                <button onClick={() => navigateTo('attendance')}>Take attendance</button>
+              </>}
               <button onClick={() => navigateTo('fees')}>Record payment</button>
             </div>}
           </div>
           <button style={styles.iconBtn} onClick={() => navigateTo('notifications')} aria-label="Open notifications"><Bell size={18} /></button>
-          <div style={styles.userChip}>
-            <div style={styles.avatar}>SJ</div>
+          <div className="dashboard-user-chip" style={styles.userChip}>
+            <div style={styles.avatar}>{user?.name?.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'U'}</div>
             <div style={styles.userMeta}>
-              <span style={styles.userName}>Sarah Johnson</span>
-              <span style={styles.userRole}>Admin</span>
+                <span style={styles.userName}>{user?.name || 'User'}</span>
+                <span style={styles.userRole}>{roleLabel}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div style={styles.statsGrid}>
+      <section className="dashboard-welcome" style={styles.welcomeBanner}>
+        <div style={styles.welcomeCopy}>
+          <span style={styles.welcomeEyebrow}>Ndugu Academy · {new Date().toLocaleDateString('en-UG', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+          <h1 style={styles.welcomeTitle}>{greeting}, {firstName}</h1>
+          <p style={styles.welcomeText}>Here&apos;s your school overview for today. Keep the {roleLabel} workspace moving with the latest activity below.</p>
+        </div>
+        <div style={styles.welcomeMark} aria-hidden="true"><GraduationCap size={30} /></div>
+      </section>
+
+      <div className="dashboard-stats-grid" style={styles.statsGrid}>
         {overviewStats.map((card) => (
-          <button key={card.label} style={styles.statCard} onClick={() => navigateTo(card.label === 'Total Students' ? 'students' : card.label === 'Average Attendance' ? 'attendance' : card.label === 'Fees Collected (UGX)' ? 'fees' : 'classes')}>
+          <button key={card.label} style={styles.statCard} onClick={() => navigateTo(card.tab)}>
             <div style={styles.statTitle}>{card.label}</div>
             <div style={styles.statValue}>{card.value}</div>
             <div style={styles.statDeltaRow}>
@@ -146,9 +172,9 @@ export default function DashboardOverview({ setCurrentTab }) {
         ))}
       </div>
 
-      <div style={styles.contentGrid}>
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
+      <div className="dashboard-content-grid" style={{ ...styles.contentGrid, display: isFinanceManager ? 'none' : undefined }}>
+        <div className="dashboard-panel" style={styles.panel}>
+          <div className="dashboard-panel-header" style={styles.panelHeader}>
             <div style={styles.panelTitleRow}>
               <div style={styles.panelTitleIcon}><TrendingUp size={16} /></div>
               <span style={styles.panelTitle}>Attendance Overview</span>
@@ -178,8 +204,8 @@ export default function DashboardOverview({ setCurrentTab }) {
           </div>
         </div>
 
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
+        <div className="dashboard-panel" style={styles.panel}>
+          <div className="dashboard-panel-header" style={styles.panelHeader}>
             <div style={styles.panelTitleRow}>
               <div style={styles.panelTitleIcon}><BadgeDollarSign size={16} /></div>
               <span style={styles.panelTitle}>Fees Collected (UGX)</span>
@@ -190,7 +216,7 @@ export default function DashboardOverview({ setCurrentTab }) {
           <div style={styles.barChartWrap}>
             {feesData.map((item) => (
               <div key={item.label} style={styles.barGroup}>
-                <div style={{ height: `${item.value}%`, ...styles.bar, background: item.value > 48 ? '#67e8d4' : '#facc15' }} />
+                <div style={{ height: `${item.value}%`, ...styles.bar, background: item.value > 48 ? '#67e8d4' : '#c59b27' }} />
                 <span style={styles.barMonth}>{item.label}</span>
               </div>
             ))}
@@ -198,9 +224,9 @@ export default function DashboardOverview({ setCurrentTab }) {
         </div>
       </div>
 
-      <div style={styles.bottomGrid}>
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
+      <div className="dashboard-bottom-grid" style={{ ...styles.bottomGrid, display: isFinanceManager ? 'none' : undefined }}>
+        <div className="dashboard-panel" style={styles.panel}>
+          <div className="dashboard-panel-header" style={styles.panelHeader}>
             <div style={styles.panelTitleRow}>
               <div style={styles.panelTitleIcon}><CalendarCheck2 size={16} /></div>
               <span style={styles.panelTitle}>Today&apos;s Class Schedule</span>
@@ -208,8 +234,8 @@ export default function DashboardOverview({ setCurrentTab }) {
             <button style={styles.moreBtn} onClick={() => navigateTo('operations')} aria-label="Open operations and events">•••</button>
           </div>
 
-          <div style={styles.tableWrap}>
-            <div style={styles.tableHead}>
+          <div className="dashboard-table-wrap" style={styles.tableWrap}>
+            <div className="dashboard-table-head" style={styles.tableHead}>
               <span>Time</span>
               <span>Class</span>
               <span>Subject</span>
@@ -217,12 +243,12 @@ export default function DashboardOverview({ setCurrentTab }) {
               <span>Status</span>
             </div>
             {schedule.map((row) => (
-              <button key={`${row.time}-${row.className}`} style={styles.tableRow} onClick={() => setSelectedItem({ type: 'Class schedule', title: `${row.className} ${row.subject}`, details: `${row.time} with ${row.teacher}`, action: 'Open timetable', tab: 'operations' })}>
-                <span>{row.time}</span>
-                <span>{row.className}</span>
-                <span>{row.subject}</span>
-                <span>{row.teacher}</span>
-                <span>
+              <button key={`${row.time}-${row.className}`} className="dashboard-table-row" style={styles.tableRow} onClick={() => setSelectedItem({ type: 'Class schedule', title: `${row.className} ${row.subject}`, details: `${row.time} with ${row.teacher}`, action: 'Open timetable', tab: 'operations' })}>
+                <span data-label="Time">{row.time}</span>
+                <span data-label="Class">{row.className}</span>
+                <span data-label="Subject">{row.subject}</span>
+                <span data-label="Teacher">{row.teacher}</span>
+                <span data-label="Status">
                   <span style={{ ...styles.statusPill, background: row.status === 'Ongoing' ? '#1d4f66' : '#f7d66f22', color: row.status === 'Ongoing' ? '#6ee7c8' : '#f6c863' }}>
                     {row.status}
                   </span>
@@ -232,8 +258,8 @@ export default function DashboardOverview({ setCurrentTab }) {
           </div>
         </div>
 
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
+        <div className="dashboard-panel" style={styles.panel}>
+          <div className="dashboard-panel-header" style={styles.panelHeader}>
             <div style={styles.panelTitleRow}>
               <div style={styles.panelTitleIcon}><Clock3 size={16} /></div>
               <span style={styles.panelTitle}>Recent Activity</span>
@@ -255,6 +281,15 @@ export default function DashboardOverview({ setCurrentTab }) {
           </div>
         </div>
       </div>
+
+      {isFinanceManager && <div className="dashboard-panel" style={styles.financeFocusPanel}>
+        <div style={styles.panelTitleRow}><div style={styles.panelTitleIcon}><BadgeDollarSign size={16} /></div><span style={styles.panelTitle}>Finance Manager workspace</span></div>
+        <p style={styles.financeFocusText}>Review collections, post receipts, manage fee invoices, and keep the school ledger reconciled.</p>
+        <div style={styles.financeActionRow}>
+          <button style={styles.financeAction} onClick={() => navigateTo('fees')}><BadgeDollarSign size={17} /> Fees &amp; invoices <ArrowUpRight size={14} /></button>
+          <button style={styles.financeAction} onClick={() => navigateTo('finance')}><TrendingUp size={17} /> Finance &amp; ERP <ArrowUpRight size={14} /></button>
+        </div>
+      </div>}
 
       {selectedItem && (
         <div style={styles.modalBackdrop} role="presentation" onClick={() => setSelectedItem(null)}>
@@ -285,18 +320,67 @@ const styles = {
   },
   searchWrap: {
     position: 'relative',
-    width: '320px',
+    width: 'min(320px, 100%)',
     maxWidth: '40%',
+    minWidth: 0,
   },
   topBar: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: '16px',
     background: '#1b2335',
     border: '1px solid rgba(148, 163, 184, 0.18)',
     borderRadius: '14px',
     padding: '12px 18px',
+  },
+  welcomeBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '20px',
+    padding: '24px 28px',
+    borderRadius: '16px',
+    background: 'linear-gradient(115deg, #211052 0%, #3f1c85 55%, #155e75 100%)',
+    border: '1px solid rgba(167, 139, 250, 0.35)',
+    boxShadow: '0 14px 30px rgba(48, 28, 104, 0.22)',
+  },
+  welcomeCopy: {
+    minWidth: 0,
+  },
+  welcomeEyebrow: {
+    display: 'block',
+    color: '#c4b5fd',
+    fontSize: '11px',
+    fontWeight: 700,
+    letterSpacing: '0.7px',
+    textTransform: 'uppercase',
+    marginBottom: '6px',
+  },
+  welcomeTitle: {
+    color: '#ffffff',
+    fontSize: '28px',
+    lineHeight: 1.15,
+    fontWeight: 800,
+    marginBottom: '7px',
+  },
+  welcomeText: {
+    color: '#ddd6fe',
+    fontSize: '13px',
+    maxWidth: '620px',
+  },
+  welcomeMark: {
+    width: '58px',
+    height: '58px',
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#fef3c7',
+    background: 'rgba(255, 255, 255, 0.13)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    borderRadius: '16px',
   },
   searchBox: {
     display: 'flex',
@@ -421,7 +505,7 @@ const styles = {
   },
   statsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, minmax(170px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
     gap: '16px',
   },
   statCard: {
@@ -461,7 +545,7 @@ const styles = {
   },
   contentGrid: {
     display: 'grid',
-    gridTemplateColumns: '1.2fr 1fr',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: '18px',
   },
   panel: {
@@ -580,8 +664,38 @@ const styles = {
   },
   bottomGrid: {
     display: 'grid',
-    gridTemplateColumns: '1.5fr 0.8fr',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: '18px',
+  },
+  financeFocusPanel: {
+    background: '#1a2335',
+    border: '1px solid rgba(148, 163, 184, 0.12)',
+    borderRadius: '14px',
+    padding: '22px',
+  },
+  financeFocusText: {
+    color: '#a7b0c8',
+    fontSize: '13px',
+    margin: '12px 0 18px',
+    maxWidth: '620px',
+  },
+  financeActionRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '10px',
+  },
+  financeAction: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    border: '1px solid rgba(148, 163, 184, 0.16)',
+    borderRadius: '9px',
+    padding: '10px 13px',
+    background: 'rgba(99, 102, 241, 0.16)',
+    color: '#edf4ff',
+    cursor: 'pointer',
+    fontWeight: 700,
+    fontSize: '12px',
   },
   tableWrap: {
     display: 'flex',

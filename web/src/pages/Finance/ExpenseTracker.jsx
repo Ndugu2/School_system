@@ -4,6 +4,8 @@ import { Receipt, Plus, CheckCircle, Clock, XCircle, X } from 'lucide-react';
 
 const UGX = (n) => `UGX ${Number(n || 0).toLocaleString()}`;
 const CATEGORIES = ['utilities','maintenance','supplies','transport','salaries','equipment','events','other'];
+const YEAR = new Date().getFullYear();
+const YEARS = [YEAR, YEAR - 1, YEAR - 2];
 
 const statusStyle = {
   pending:  { color: '#f59e0b', bg: '#fef3c7', icon: Clock },
@@ -12,13 +14,21 @@ const statusStyle = {
   paid:     { color: '#4f46e5', bg: '#e0e7ff', icon: CheckCircle },
 };
 
-export default function ExpenseTracker() {
+export default function ExpenseTracker({ readOnly = false }) {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterCat, setFilterCat] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterYear, setFilterYear] = useState(String(YEAR));
   const [showModal, setShowModal] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
   const [form, setForm] = useState({ title: '', category: 'utilities', amount: '', date: new Date().toISOString().split('T')[0], vendor: '', description: '', paymentMethod: 'cash', term: '' });
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const fetchExpenses = async () => {
     setLoading(true);
@@ -26,13 +36,14 @@ export default function ExpenseTracker() {
       const params = new URLSearchParams();
       if (filterCat) params.append('category', filterCat);
       if (filterStatus) params.append('status', filterStatus);
+      if (filterYear) params.append('academicYear', filterYear);
       const data = await api.get(`/finance/expenses?${params}`);
       setExpenses(data);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchExpenses(); }, [filterCat, filterStatus]);
+  useEffect(() => { fetchExpenses(); }, [filterCat, filterStatus, filterYear]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,36 +67,40 @@ export default function ExpenseTracker() {
   const totalApproved = expenses.filter(e => ['approved','paid'].includes(e.status)).reduce((s, e) => s + e.amount, 0);
 
   return (
-    <div style={s.container}>
-      <div style={s.header}>
+    <div style={{ ...s.container, gap: isMobile ? 16 : 20 }}>
+      <div style={{ ...s.header, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'flex-start' }}>
         <div>
-          <h2 style={s.title}>Expense Tracker</h2>
+          <h2 style={s.title}>School Expense Ledger</h2>
           <div style={s.summaryPills}>
-            <span style={{ ...s.pill, color: '#f59e0b', backgroundColor: '#fef3c7' }}>Pending: {UGX(totalPending)}</span>
-            <span style={{ ...s.pill, color: '#10b981', backgroundColor: '#d1fae5' }}>Approved: {UGX(totalApproved)}</span>
+            <span style={{ ...s.pill, color: '#f59e0b', backgroundColor: '#fef3c7' }}>Pending Claims: {UGX(totalPending)}</span>
+            <span style={{ ...s.pill, color: '#10b981', backgroundColor: '#d1fae5' }}>Approved Expenditure: {UGX(totalApproved)}</span>
           </div>
         </div>
-        <button style={s.primaryBtn} onClick={() => setShowModal(true)}>
-          <Plus size={16} /> Log Expense
-        </button>
+        {!readOnly && <button style={s.primaryBtn} onClick={() => setShowModal(true)}>
+          <Plus size={16} /> Record Expense
+        </button>}
       </div>
 
-      <div style={s.filterBar}>
+      <div style={{ ...s.filterBar, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(160px, 1fr))' }}>
         <select style={s.select} value={filterCat} onChange={e => setFilterCat(e.target.value)}>
-          <option value="">All Categories</option>
+          <option value="">All Expense Categories</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
         </select>
         <select style={s.select} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="">All Statuses</option>
+          <option value="">All Approval Statuses</option>
           {Object.keys(statusStyle).map(k => <option key={k} value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>)}
+        </select>
+        <select style={s.select} value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+          <option value="">All Academic Years</option>
+          {YEARS.map(year => <option key={year} value={year}>{year}</option>)}
         </select>
       </div>
 
-      <div style={s.tableWrap}>
+      <div style={{ ...s.tableWrap, overflowX: 'auto' }}>
         {loading ? <div style={s.empty}>Loading expenses…</div> : expenses.length === 0 ? (
           <div style={s.empty}>No expense records found.</div>
         ) : (
-          <table style={s.table}>
+          <table style={{ ...s.table, minWidth: isMobile ? 720 : 960 }}>
             <thead>
               <tr style={s.thead}>
                 {['Title','Category','Vendor','Amount','Date','Method','Submitted By','Status','Actions'].map(h => (
@@ -112,7 +127,7 @@ export default function ExpenseTracker() {
                       </span>
                     </td>
                     <td style={s.td}>
-                      {exp.status === 'pending' && (
+                      {!readOnly && exp.status === 'pending' && (
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button style={s.approveBtn} onClick={() => handleApprove(exp._id, 'approve')}>Approve</button>
                           <button style={s.rejectBtn} onClick={() => handleApprove(exp._id, 'reject')}>Reject</button>
@@ -129,47 +144,47 @@ export default function ExpenseTracker() {
 
       {showModal && (
         <div style={s.overlay}>
-          <div style={s.modal}>
+          <div style={{ ...s.modal, maxWidth: isMobile ? 'min(100%, 520px)' : 520, padding: isMobile ? 18 : 28 }}>
             <div style={s.modalHeader}>
-              <h3 style={s.modalTitle}>Log New Expense</h3>
+              <h3 style={s.modalTitle}>Record New Expense Claim</h3>
               <button style={s.closeBtn} onClick={() => setShowModal(false)}><X size={18} /></button>
             </div>
             <form onSubmit={handleSubmit} style={s.form}>
-              <div style={s.row}>
+              <div style={{ ...s.row, flexDirection: isMobile ? 'column' : 'row' }}>
                 <div style={s.field}>
-                  <label style={s.label}>Title</label>
+                  <label style={s.label}>Expense Description</label>
                   <input required style={s.input} placeholder="e.g. UMEME Electricity Bill" value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
                 </div>
                 <div style={s.field}>
-                  <label style={s.label}>Category</label>
+                  <label style={s.label}>Expense Category</label>
                   <select style={s.input} value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                   </select>
                 </div>
               </div>
-              <div style={s.row}>
+              <div style={{ ...s.row, flexDirection: isMobile ? 'column' : 'row' }}>
                 <div style={s.field}>
                   <label style={s.label}>Amount (UGX)</label>
                   <input required type="number" style={s.input} value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} />
                 </div>
                 <div style={s.field}>
-                  <label style={s.label}>Date</label>
+                  <label style={s.label}>Transaction Date</label>
                   <input type="date" style={s.input} value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
                 </div>
               </div>
               <div style={s.row}>
                 <div style={s.field}>
-                  <label style={s.label}>Vendor / Supplier</label>
+                  <label style={s.label}>Supplier / Vendor</label>
                   <input style={s.input} placeholder="e.g. Kampala Stationery Ltd" value={form.vendor} onChange={e => setForm({...form, vendor: e.target.value})} />
                 </div>
                 <div style={s.field}>
-                  <label style={s.label}>Payment Method</label>
+                  <label style={s.label}>Settlement Method</label>
                   <select style={s.input} value={form.paymentMethod} onChange={e => setForm({...form, paymentMethod: e.target.value})}>
                     {['cash','bank','momo','cheque'].map(m => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
                   </select>
                 </div>
               </div>
-              <label style={s.label}>Description / Notes</label>
+              <label style={s.label}>Narration / Notes</label>
               <textarea style={{ ...s.input, minHeight: 80, resize: 'vertical' }} value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
               <button type="submit" style={s.primaryBtn}>Submit for Approval</button>
             </form>

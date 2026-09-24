@@ -1,6 +1,6 @@
 import { queueRequest, syncQueue } from './SyncQueue';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+export const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 
 const fetchApi = async (endpoint, options = {}) => {
   const token = localStorage.getItem('token');
@@ -57,6 +57,7 @@ export const api = {
   get: (endpoint, options) => fetchApi(endpoint, { method: 'GET', ...options }),
   post: (endpoint, body, options) => fetchApi(endpoint, { method: 'POST', body, ...options }),
   put: (endpoint, body, options) => fetchApi(endpoint, { method: 'PUT', body, ...options }),
+  patch: (endpoint, body, options) => fetchApi(endpoint, { method: 'PATCH', body, ...options }),
   delete: (endpoint, options) => fetchApi(endpoint, { method: 'DELETE', ...options }),
 };
 

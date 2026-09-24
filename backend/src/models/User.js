@@ -26,6 +26,7 @@ const userSchema = new mongoose.Schema({
       'super-admin',    // Full system access, configuration
       'admin',          // School-wide management (Head Teacher)
       'headteacher',    // School leadership portal and administrative oversight
+      'hod',            // Head of Department, academic quality and assessment review
       'director-of-studies', // Academic leadership and assessment oversight
       'supervisor',     // Academic / pastoral supervisor & inspector
       'deputy-head',    // Administration

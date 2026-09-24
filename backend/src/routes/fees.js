@@ -1,8 +1,12 @@
 const express = require('express');
+const os = require('os');
+const path = require('path');
 const FeeStructure = require('../models/FeeStructure');
 const Payment = require('../models/Payment');
 const Student = require('../models/Student');
 const Class = require('../models/Class');
+const MealCard = require('../models/MealCard');
+const StudentPass = require('../models/StudentPass');
 const { protect, authorize } = require('../middleware/auth');
 const router = express.Router();
 
@@ -23,6 +27,98 @@ const generateReceiptNumber = async () => {
   }
 
   return `${prefix}${String(sequence).padStart(5, '0')}`;
+};
+
+// ── Licoka 40% Fee Threshold Automation ─────────────────────────────────────
+const syncFinancialPasses = async (studentId, term, academicYear, actorId) => {
+  try {
+    const student = await Student.findById(studentId).populate('currentClass');
+    if (!student) return null;
+
+    const classLevel = student.currentClassLevel || student.currentClass?.level || 'S1';
+    const year = academicYear || new Date().getFullYear();
+
+    // 1. Get Fee Structure for class level and term
+    const feeStructure = await FeeStructure.findOne({
+      classLevel,
+      term,
+      academicYear: year
+    });
+
+    const totalInvoiced = feeStructure ? (feeStructure.totalAmount || feeStructure.totalDayStudent || 0) : 0;
+
+    // 2. Sum up non-rejected payments
+    const payments = await Payment.find({
+      student: studentId,
+      term,
+      academicYear: year,
+      status: { $ne: 'rejected' }
+    });
+
+    const totalPaid = payments.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
+    const percentage = totalInvoiced > 0 ? Math.min(100, Math.round((totalPaid / totalInvoiced) * 100 * 100) / 100) : (totalPaid > 0 ? 100 : 0);
+
+    let mealCard = null;
+    let studentPass = null;
+
+    // 3. Licoka 40% Rule: Issue MealCard and StudentPass once >= 40% is paid
+    if (percentage >= 40) {
+      studentPass = await StudentPass.findOne({ student: studentId, term, academicYear: year });
+      if (!studentPass) {
+        const passNumber = await StudentPass.generatePassNumber();
+        studentPass = await StudentPass.create({
+          student: studentId,
+          term,
+          academicYear: year,
+          passNumber,
+          percentageCleared: percentage,
+          isValid: true,
+          examPermitted: true,
+          issuedBy: actorId || null,
+          remarks: `Issued upon reaching ${percentage}% fee threshold`
+        });
+      } else {
+        studentPass.percentageCleared = percentage;
+        studentPass.isValid = true;
+        studentPass.examPermitted = true;
+        await studentPass.save();
+      }
+
+      mealCard = await MealCard.findOne({ student: studentId, term, academicYear: year });
+      if (!mealCard) {
+        const cardNumber = await MealCard.generateCardNumber();
+        mealCard = await MealCard.create({
+          student: studentId,
+          term,
+          academicYear: year,
+          cardNumber,
+          isValid: true,
+          issuedBy: actorId || null,
+          notes: '31-Day Term Dining Hall Card'
+        });
+      }
+    }
+
+    if (percentage >= 100) {
+      if (student.studentStatus === 'enrolled' || student.studentStatus === 'admitted') {
+        student.studentStatus = 'active';
+        await student.save();
+      }
+    }
+
+    return {
+      percentage,
+      totalPaid,
+      totalInvoiced,
+      studentPass,
+      mealCard,
+      isCleared: percentage >= 100,
+      thresholdMet: percentage >= 40
+    };
+  } catch (err) {
+    console.error('Error in syncFinancialPasses:', err);
+    return null;
+  }
 };
 
 // @route   POST /api/fees/structures
@@ -79,7 +175,7 @@ router.get('/structures', protect, async (req, res) => {
 // @route   POST /api/fees/payments
 // @desc    Record/pay student fees (Stage 1: Recorded)
 // @access  Private (Admin/Super-Admin/Bursar/Parent for self)
-router.post('/payments', protect, async (req, res) => {
+router.post('/payments', protect, authorize('super-admin', 'admin', 'bursar', 'parent', 'student'), async (req, res) => {
   const { studentId, term, academicYear, amountPaid, paymentMethod, transactionReference, remarks } = req.body;
 
   try {
@@ -111,7 +207,12 @@ router.post('/payments', protect, async (req, res) => {
       remarks: remarks || ''
     });
 
-    res.status(201).json(payment);
+    const passSync = await syncFinancialPasses(studentId, term, year, req.user._id);
+
+    res.status(201).json({
+      payment,
+      passSync
+    });
   } catch (error) {
     console.error('Record payment error:', error);
     res.status(500).json({ error: { message: error.message } });
@@ -190,11 +291,14 @@ router.post('/payments/:id/post', protect, authorize('bursar', 'admin', 'super-a
     feeAccount.recalculate();
     await feeAccount.save();
 
+    const passSync = await syncFinancialPasses(payment.student._id || payment.student, payment.term, payment.academicYear, req.user._id);
+
     res.json({
       message: 'Payment posted to account ledger successfully',
       payment,
       updatedBalance: feeAccount.balance,
-      totalPaid: feeAccount.totalPaid
+      totalPaid: feeAccount.totalPaid,
+      passSync
     });
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
@@ -495,7 +599,7 @@ router.get('/invoice-pdf/:studentId/:term', protect, async (req, res) => {
 
     // Generate PDF
     const fileName = `invoice-${studentId}-${term}-${Date.now()}.pdf`;
-    const filePath = `/tmp/${fileName}`;
+    const filePath = path.join(os.tmpdir(), fileName);
     
     await InvoiceGenerator.generateInvoice(invoiceData, filePath);
 
@@ -698,4 +802,143 @@ router.post('/send-reminders', protect, authorize('admin', 'super-admin'), async
   }
 });
 
+// ── Licoka Gatekeeper Endpoints (StudentPasses & MealCards) ─────────────────
+
+// @route   GET /api/fees/student-passes
+// @desc    List all student passes with student biodata
+// @access  Private
+router.get('/student-passes', protect, async (req, res) => {
+  try {
+    const { term, academicYear, isValid } = req.query;
+    const query = {};
+    if (term) query.term = term;
+    if (academicYear) query.academicYear = parseInt(academicYear);
+    if (isValid !== undefined) query.isValid = isValid === 'true';
+
+    const passes = await StudentPass.find(query)
+      .populate({
+        path: 'student',
+        populate: [
+          { path: 'user', select: 'name email' },
+          { path: 'currentClass', select: 'name level streams' }
+        ]
+      })
+      .populate('issuedBy', 'name')
+      .sort({ createdAt: -1 });
+
+    res.json(passes);
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
+// @route   GET /api/fees/meal-cards
+// @desc    List all meal cards with dining attendance
+// @access  Private
+router.get('/meal-cards', protect, async (req, res) => {
+  try {
+    const { term, academicYear, isValid } = req.query;
+    const query = {};
+    if (term) query.term = term;
+    if (academicYear) query.academicYear = parseInt(academicYear);
+    if (isValid !== undefined) query.isValid = isValid === 'true';
+
+    const cards = await MealCard.find(query)
+      .populate({
+        path: 'student',
+        populate: [
+          { path: 'user', select: 'name email' },
+          { path: 'currentClass', select: 'name level' }
+        ]
+      })
+      .populate('issuedBy', 'name')
+      .sort({ createdAt: -1 });
+
+    res.json(cards);
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
+// @route   POST /api/fees/meal-cards/:id/log-day
+// @desc    Log a meal punch day (1-31) for dining hall
+// @access  Private
+router.post('/meal-cards/:id/log-day', protect, async (req, res) => {
+  try {
+    const { dayNumber } = req.body;
+    const card = await MealCard.findById(req.params.id);
+    if (!card) return res.status(404).json({ error: { message: 'Meal card not found' } });
+    if (!card.isValid) return res.status(400).json({ error: { message: 'Meal card is not valid or has been suspended' } });
+
+    const num = parseInt(dayNumber, 10);
+    if (isNaN(num) || num < 1 || num > 31) {
+      return res.status(400).json({ error: { message: 'Day number must be between 1 and 31' } });
+    }
+
+    const alreadyLogged = card.mealDaysLogged.some(m => m.dayNumber === num);
+    if (alreadyLogged) {
+      return res.status(400).json({ error: { message: `Day ${num} is already logged on this card` } });
+    }
+
+    card.mealDaysLogged.push({
+      dayNumber: num,
+      date: new Date(),
+      loggedBy: req.user.name || 'Dining Staff'
+    });
+
+    await card.save();
+    res.json({ success: true, message: `Day ${num} recorded`, card });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
+// @route   POST /api/fees/passes/sync-all
+// @desc    Evaluate all students for the term and issue passes for anyone >= 40%
+// @access  Private (Bursar, Admin, Super-Admin)
+router.post('/passes/sync-all', protect, authorize('bursar', 'admin', 'super-admin'), async (req, res) => {
+  try {
+    const term = req.body.term || 'Term 1';
+    const academicYear = req.body.academicYear || new Date().getFullYear();
+
+    const students = await Student.find({ studentStatus: { $in: ['active', 'enrolled', 'admitted'] } });
+    let issuedCount = 0;
+
+    for (const s of students) {
+      const result = await syncFinancialPasses(s._id, term, academicYear, req.user._id);
+      if (result && result.thresholdMet) {
+        issuedCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Pass synchronization complete. Evaluated ${students.length} students; ${issuedCount} eligible for Meal Cards & Student Passes.`
+    });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
+// @route   GET /api/fees/student-passes/check/:studentId
+// @desc    Check pass status & eligibility for a specific student
+// @access  Private
+router.get('/student-passes/check/:studentId', protect, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const term = req.query.term || 'Term 1';
+    const academicYear = req.query.academicYear ? parseInt(req.query.academicYear) : new Date().getFullYear();
+
+    const result = await syncFinancialPasses(studentId, term, academicYear, req.user._id);
+    if (!result) {
+      return res.status(404).json({ error: { message: 'Student or fee structure not found' } });
+    }
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
 module.exports = router;
+module.exports.syncFinancialPasses = syncFinancialPasses;

@@ -60,7 +60,7 @@ router.delete('/books/:id', protect, authorize('super-admin', 'admin'), async (r
 // LOANS
 // ═══════════════════════════════════════════════════════════════════════════
 
-router.get('/loans', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
+router.get('/loans', protect, authorize('super-admin', 'admin', 'teacher', 'class-teacher'), async (req, res) => {
   try {
     const { status, borrowerId, page = 1, limit = 50 } = req.query;
     const query = {};
