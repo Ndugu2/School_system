@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
-import { FileText, Plus, Search, Filter, Download, ChevronDown, X, CheckCircle, Clock, AlertCircle, XCircle, Send } from 'lucide-react';
+import { FileText, Plus, Search, Filter, Download, ChevronDown, X, CheckCircle, Clock, AlertCircle, XCircle, Send, Printer, DollarSign, Trash2, BookOpen } from 'lucide-react';
 
 const UGX = (n) => `UGX ${Number(n || 0).toLocaleString()}`;
 const CLASSES = ['Nursery','P1','P2','P3','P4','P5','P6','P7','S1','S2','S3','S4','S5','S6'];
@@ -15,7 +15,7 @@ const statusConfig = {
   waived:  { color: '#94a3b8', bg: '#f1f5f9', icon: XCircle,      label: 'Waived' },
 };
 
-export default function InvoiceManager() {
+export default function InvoiceManager({ readOnly = false, onReceivePayment, onOpenStatement }) {
   const [invoices, setInvoices] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -159,6 +159,11 @@ export default function InvoiceManager() {
                               <Send size={12} style={{ marginRight: 4 }} /> Remind
                             </button>
                           </>
+                        )}
+                        {onOpenStatement && (
+                          <button style={{ ...s.payBtn, backgroundColor: '#fef3c7', color: '#b45309' }} onClick={onOpenStatement}>
+                            <BookOpen size={12} style={{ marginRight: 4 }} /> Statement
+                          </button>
                         )}
                       </div>
                     </td>
