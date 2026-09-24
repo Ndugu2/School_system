@@ -10,6 +10,7 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
   const isHeadteacher = type === 'headteacher';
   const isHod = type === 'hod';
   const [data, setData] = useState({ students: 0, teachers: 0, attendance: null, results: [], fees: null, overdue: [] });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -31,6 +32,7 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
         teachers: teachers.status === 'fulfilled' ? teachers.value.length : 0,
         overdue: overdue.status === 'fulfilled' ? overdue.value.students || overdue.value || [] : [],
       });
+      setLoading(false);
     });
     return () => { mounted = false; };
   }, [isHeadteacher]);
@@ -41,16 +43,16 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
 
   const cards = isHeadteacher
     ? [
-        makeStat('Total learners', data.students, Users, '#2563eb', 'Current enrollment'),
-        makeStat('Weekly attendance', `${attendanceRate}%`, CalendarCheck2, '#0f9f79', 'Whole-school rate'),
-        makeStat('Fee collections', data.fees === null ? '...' : `UGX ${Number(data.fees).toLocaleString('en-UG')}`, CircleDollarSign, '#b7791f', 'Term 1 collections'),
-        makeStat('Teaching staff', data.teachers, UserRoundCheck, '#7c3aed', 'Active teacher profiles')
+        makeStat('Total learners', loading ? '...' : data.students, Users, '#2563eb', 'Current enrollment'),
+        makeStat('Weekly attendance', loading ? '...' : `${attendanceRate}%`, CalendarCheck2, '#0f9f79', 'Whole-school rate'),
+        makeStat('Fee collections', loading || data.fees === null ? '...' : `UGX ${Number(data.fees).toLocaleString('en-UG')}`, CircleDollarSign, '#b7791f', 'Term 1 collections'),
+        makeStat('Teaching staff', loading ? '...' : data.teachers, UserRoundCheck, '#7c3aed', 'Active teacher profiles')
       ]
     : [
-        makeStat(isHod ? 'Learners in department' : 'Learners tracked', data.students, Users, '#2563eb', isHod ? 'Academic oversight' : 'Across school academics'),
-        makeStat('Weekly attendance', `${attendanceRate}%`, CalendarCheck2, '#0f9f79', 'Current academic term'),
-        makeStat(isHod ? 'Results for review' : 'Results awaiting review', drafts, ClipboardCheck, '#d97706', isHod ? 'Submitted or draft assessments' : 'Draft assessment entries'),
-        makeStat('Published results', published, GraduationCap, '#7c3aed', 'Available to families')
+        makeStat(isHod ? 'Learners in department' : 'Learners tracked', loading ? '...' : data.students, Users, '#2563eb', isHod ? 'Academic oversight' : 'Across school academics'),
+        makeStat('Weekly attendance', loading ? '...' : `${attendanceRate}%`, CalendarCheck2, '#0f9f79', 'Current academic term'),
+        makeStat(isHod ? 'Results for review' : 'Results awaiting review', loading ? '...' : drafts, ClipboardCheck, '#d97706', isHod ? 'Submitted or draft assessments' : 'Draft assessment entries'),
+        makeStat('Published results', loading ? '...' : published, GraduationCap, '#7c3aed', 'Available to families')
       ];
 
   const actions = isHeadteacher
@@ -160,9 +162,9 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
               <AlertTriangle color="#c2410c" size={20} />
             </div>
             <div style={s.alerts}>
-              <Alert icon={CalendarCheck2} color="#c2410c" title={`${data.attendance?.frequentlyAbsent?.length || 0} learners need attendance follow-up`} note="Frequent absences recorded this term" tab="attendance" go={setCurrentTab} />
-              <Alert icon={Clock3} color="#a16207" title={`${drafts} results await academic review`} note="Draft assessment entries still open" tab="grades" go={setCurrentTab} />
-              <Alert icon={WalletCards} color="#6d28d9" title={`${data.overdue.length} fee accounts require follow-up`} note="Outstanding balances for the current term" tab="fees" go={setCurrentTab} />
+              <Alert icon={CalendarCheck2} color="#c2410c" title={`${loading ? '...' : data.attendance?.frequentlyAbsent?.length || 0} learners need attendance follow-up`} note="Frequent absences recorded this term" tab="attendance" go={setCurrentTab} />
+              <Alert icon={Clock3} color="#a16207" title={`${loading ? '...' : drafts} results await academic review`} note="Draft assessment entries still open" tab="grades" go={setCurrentTab} />
+              <Alert icon={WalletCards} color="#6d28d9" title={`${loading ? '...' : data.overdue.length} fee accounts require follow-up`} note="Outstanding balances for the current term" tab="fees" go={setCurrentTab} />
             </div>
           </article>
 

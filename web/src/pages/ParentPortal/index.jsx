@@ -8,6 +8,7 @@ export default function ParentPortal() {
   const [selectedChild, setSelectedChild] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [childrenLoading, setChildrenLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
@@ -17,7 +18,8 @@ export default function ParentPortal() {
         setChildren(res);
         if (res.length > 0) setSelectedChild(res[0]);
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setChildrenLoading(false));
   }, []);
 
   useEffect(() => {
@@ -27,7 +29,8 @@ export default function ParentPortal() {
       api.get(`/exam-results?student=${selectedChild._id}&term=Term 1&academicYear=${new Date().getFullYear()}&approvalStatus=published`),
       api.get(`/attendance?studentId=${selectedChild._id}&term=Term 1`),
       api.get(`/fees/invoice/${selectedChild._id}/Term%201?academicYear=${new Date().getFullYear()}`),
-    ]).then(([gradesResult, attendanceResult, financeResult]) => {
+      api.get(`/finance/wallets/${selectedChild._id}`),
+    ]).then(([gradesResult, attendanceResult, financeResult, walletResult]) => {
       const examResults = gradesResult.status === 'fulfilled' ? gradesResult.value.results || [] : [];
       const invoiceResult = financeResult.status === 'fulfilled' ? financeResult.value : null;
       const invoice = invoiceResult?.summary ? {
@@ -38,16 +41,18 @@ export default function ParentPortal() {
         totalAmount: invoiceResult.summary.totalInvoiced,
         balance: invoiceResult.summary.balance,
       } : null;
+      const wallet = walletResult.status === 'fulfilled' ? walletResult.value : { balance: 0, dailyLimit: 10000, transactions: [] };
       setDashboardData({
         grades: examResults.map(result => ({ ...result, score: result.percentage, assessmentType: result.examType })),
         attendance: attendanceResult.status === 'fulfilled' ? attendanceResult.value : [],
         finance: invoice ? [invoice] : [],
-        wallet: { balance: 0, dailyLimit: 10000, transactions: [] },
+        wallet,
       });
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, [selectedChild]);
 
+  if (childrenLoading) return <div style={s.loading}>Loading your children…</div>;
   if (!children.length) return <div style={s.empty}>No children records found for this parent account.</div>;
   if (loading || !dashboardData) return <div style={s.loading}>Loading student profile…</div>;
 
@@ -264,23 +269,15 @@ export default function ParentPortal() {
           </div>
           <div style={{ display: 'flex', gap: 12, marginBottom: 16, padding: 12, backgroundColor: '#fef3c7', borderRadius: 8, alignItems: 'center' }}>
             <AlertTriangle size={20} color="#b45309" />
-            <p style={{ fontSize: 14, color: '#92400e', fontWeight: 600 }}>Bus 4 is currently 2 km away. ETA: 5 mins to pick-up point.</p>
+            <p style={{ fontSize: 14, color: '#92400e', fontWeight: 600 }}>Live bus tracking is not available for this route yet.</p>
           </div>
-          {/* Simulated Map Background */}
-          <div style={{ flex: 1, backgroundColor: '#e2e8f0', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundImage: 'url("https://www.transparenttextures.com/patterns/cartographer.png")' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', animation: 'bounce 2s infinite' }}>
-              <MapPin size={48} color="#ef4444" fill="#fecaca" />
-              <div style={{ backgroundColor: '#fff', padding: '4px 8px', borderRadius: 4, fontWeight: 700, fontSize: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.1)', marginTop: 4 }}>
-                Route 4 - Kampala Road
-              </div>
+          <div style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center' }}>
+              <MapPin size={42} color="var(--text-tertiary)" />
+              <strong style={{ color: 'var(--text-secondary)' }}>Route tracking will appear here</strong>
+              <span style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>Contact the school office for current transport updates.</span>
             </div>
           </div>
-          <style dangerouslySetInnerHTML={{__html: `
-            @keyframes bounce {
-              0%, 100% { transform: translateY(0); }
-              50% { transform: translateY(-10px); }
-            }
-          `}} />
         </div>
       )}
     </div>

@@ -4,12 +4,14 @@ const mongoose = require('mongoose');
 const Invoice = require('../models/Invoice');
 const Payroll = require('../models/Payroll');
 const Expense = require('../models/Expense');
+const JournalEntry = require('../models/JournalEntry');
 const FeeStructure = require('../../../models/FeeStructure');  // reuse existing
 const Student = require('../../../models/Student');
 const User = require('../../../models/User');
 const { protect, authorize } = require('../../../middleware/auth');
 const { canAccessStudent } = require('../../../middleware/recordAccess');
-const FINANCE_ROLES = ['super-admin', 'admin', 'headteacher', 'bursar'];
+const FINANCE_VIEW_ROLES = ['super-admin', 'admin', 'headteacher', 'bursar'];
+const FINANCE_EDIT_ROLES = ['super-admin', 'admin', 'bursar'];
 
 // ── HELPER ───────────────────────────────────────────────────────────────────
 const generateInvoiceNumber = async () => {
@@ -19,13 +21,91 @@ const generateInvoiceNumber = async () => {
   return `${prefix}${String(seq).padStart(5, '0')}`;
 };
 
+const generateJournalEntryNumber = async () => {
+  const prefix = `JE-${new Date().getFullYear()}-`;
+  const last = await JournalEntry.findOne({ entryNumber: new RegExp('^' + prefix) }).sort({ entryNumber: -1 });
+  const sequence = last ? parseInt(last.entryNumber.split('-')[2], 10) + 1 : 1;
+  return `${prefix}${String(sequence).padStart(5, '0')}`;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GENERAL LEDGER
+// ═══════════════════════════════════════════════════════════════════════════
+
+// @route GET /api/finance/journal-entries
+router.get('/journal-entries', protect, authorize(...FINANCE_VIEW_ROLES), async (req, res) => {
+  try {
+    const { academicYear = new Date().getFullYear(), limit = 50 } = req.query;
+    const entries = await JournalEntry.find({ academicYear: parseInt(academicYear, 10) })
+      .populate('createdBy', 'name')
+      .sort({ date: -1, createdAt: -1 })
+      .limit(parseInt(limit, 10));
+    res.json(entries);
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
+// @route POST /api/finance/journal-entries
+router.post('/journal-entries', protect, authorize(...FINANCE_EDIT_ROLES), async (req, res) => {
+  try {
+    const { date, description, reference, academicYear, lines } = req.body;
+    const entry = await JournalEntry.create({
+      entryNumber: await generateJournalEntryNumber(),
+      date,
+      description,
+      reference,
+      academicYear: academicYear || new Date().getFullYear(),
+      lines,
+      createdBy: req.user._id,
+    });
+    res.status(201).json(entry);
+  } catch (err) {
+    res.status(400).json({ error: { message: err.message } });
+  }
+});
+
+// @route GET /api/finance/reports/trial-balance
+router.get('/reports/trial-balance', protect, authorize(...FINANCE_VIEW_ROLES), async (req, res) => {
+  try {
+    const { academicYear = new Date().getFullYear() } = req.query;
+    const entries = await JournalEntry.find({ academicYear: parseInt(academicYear, 10) }).select('lines');
+    const accountsByCode = new Map();
+
+    entries.forEach(entry => entry.lines.forEach(line => {
+      const current = accountsByCode.get(line.accountCode) || {
+        accountCode: line.accountCode,
+        accountName: line.accountName,
+        accountType: line.accountType,
+        debit: 0,
+        credit: 0,
+      };
+      current.debit += Number(line.debit || 0);
+      current.credit += Number(line.credit || 0);
+      accountsByCode.set(line.accountCode, current);
+    }));
+
+    const accounts = [...accountsByCode.values()].sort((a, b) => a.accountCode.localeCompare(b.accountCode));
+    res.json({
+      academicYear: parseInt(academicYear, 10),
+      accounts,
+      totals: accounts.reduce((total, account) => ({
+        debit: total.debit + account.debit,
+        credit: total.credit + account.credit,
+      }), { debit: 0, credit: 0 }),
+    });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // INVOICES
 // ═══════════════════════════════════════════════════════════════════════════
 
 // @desc  Get all invoices (with filters)
 // @route GET /api/finance/invoices
-router.get('/invoices', protect, authorize(...FINANCE_ROLES), async (req, res) => {
+router.get('/invoices', protect, authorize(...FINANCE_VIEW_ROLES), async (req, res) => {
   try {
     const { status, term, academicYear, classLevel, page = 1, limit = 50 } = req.query;
     const query = {};
@@ -50,7 +130,7 @@ router.get('/invoices', protect, authorize(...FINANCE_ROLES), async (req, res) =
 
 // @desc  Generate invoices for a grade cohort (bulk)
 // @route POST /api/finance/invoices/generate-bulk
-router.post('/invoices/generate-bulk', protect, authorize(...FINANCE_ROLES), async (req, res) => {
+router.post('/invoices/generate-bulk', protect, authorize(...FINANCE_EDIT_ROLES), async (req, res) => {
   const { classLevel, term, academicYear, dueDate, discounts } = req.body;
 
   try {
@@ -62,11 +142,13 @@ router.post('/invoices/generate-bulk', protect, authorize(...FINANCE_ROLES), asy
     }
 
     // Find all students in this class level
-    const studentsInClass = await Student.find({})
-      .populate('class', 'level')
+    const studentsInClass = await Student.find({
+      $or: [{ currentClassLevel: classLevel }, { currentClass: { $ne: null } }],
+    })
+      .populate('currentClass', 'level')
       .populate('user', 'name');
 
-    const targetStudents = studentsInClass.filter(s => s.class?.level === classLevel);
+    const targetStudents = studentsInClass.filter(s => s.currentClassLevel === classLevel || s.currentClass?.level === classLevel);
     if (targetStudents.length === 0) {
       return res.status(404).json({ error: { message: `No students found for class level: ${classLevel}` } });
     }
@@ -139,7 +221,7 @@ router.get('/invoices/:id', protect, async (req, res) => {
       .populate({ path: 'student', populate: { path: 'user', select: 'name email' } })
       .populate('generatedBy', 'name');
     if (!invoice) return res.status(404).json({ error: { message: 'Invoice not found' } });
-    if (!FINANCE_ROLES.includes(req.user.role) && !(await canAccessStudent(req.user, invoice.student._id || invoice.student))) {
+    if (!FINANCE_VIEW_ROLES.includes(req.user.role) && !(await canAccessStudent(req.user, invoice.student._id || invoice.student))) {
       return res.status(403).json({ error: { message: 'Not authorized to view this invoice' } });
     }
     res.json(invoice);
@@ -150,7 +232,7 @@ router.get('/invoices/:id', protect, async (req, res) => {
 
 // @desc  Record payment against an invoice
 // @route POST /api/finance/invoices/:id/pay
-router.post('/invoices/:id/pay', protect, authorize(...FINANCE_ROLES, 'parent'), async (req, res) => {
+router.post('/invoices/:id/pay', protect, authorize(...FINANCE_EDIT_ROLES, 'parent'), async (req, res) => {
   const { amount, method, transactionRef, remarks } = req.body;
 
   try {
@@ -174,6 +256,22 @@ router.post('/invoices/:id/pay', protect, authorize(...FINANCE_ROLES, 'parent'),
     invoice.paidAmount += payAmount;
     // Status auto-updated by pre-save hook
     await invoice.save();
+
+    const cashAccount = method === 'MTN Mobile Money' || method === 'Airtel Money'
+      ? 'Mobile Money Clearing'
+      : method || 'Cash and Mobile Money';
+    await JournalEntry.create({
+      entryNumber: await generateJournalEntryNumber(),
+      date: new Date(),
+      description: `Fee receipt for ${invoice.invoiceNumber}`,
+      reference: transactionRef || invoice.invoiceNumber,
+      academicYear: invoice.academicYear,
+      lines: [
+        { accountCode: '1200', accountName: cashAccount, accountType: 'Asset', debit: payAmount, credit: 0 },
+        { accountCode: '1100', accountName: 'Student Fees Receivable', accountType: 'Asset', debit: 0, credit: payAmount },
+      ],
+      createdBy: req.user._id,
+    });
 
     res.json({ message: 'Payment recorded successfully', invoice });
   } catch (err) {
@@ -205,7 +303,7 @@ router.get('/my-invoices', protect, async (req, res) => {
 
 // @desc  Finance summary report
 // @route GET /api/finance/reports/summary
-router.get('/reports/summary', protect, authorize(...FINANCE_ROLES), async (req, res) => {
+router.get('/reports/summary', protect, authorize(...FINANCE_VIEW_ROLES), async (req, res) => {
   try {
     const { academicYear = new Date().getFullYear(), term } = req.query;
     const matchQ = { academicYear: parseInt(academicYear) };
@@ -250,7 +348,7 @@ router.get('/reports/summary', protect, authorize(...FINANCE_ROLES), async (req,
 
 // @desc  Smart Cashflow Forecast
 // @route GET /api/finance/reports/cashflow-forecast
-router.get('/reports/cashflow-forecast', protect, authorize(...FINANCE_ROLES), async (req, res) => {
+router.get('/reports/cashflow-forecast', protect, authorize(...FINANCE_VIEW_ROLES), async (req, res) => {
   try {
     const { academicYear = new Date().getFullYear() } = req.query;
     const activeInvoices = await Invoice.find({ academicYear, status: { $in: ['pending', 'partial'] } });
@@ -277,7 +375,7 @@ router.get('/reports/cashflow-forecast', protect, authorize(...FINANCE_ROLES), a
 // ═══════════════════════════════════════════════════════════════════════════
 
 // @route GET /api/finance/payroll
-router.get('/payroll', protect, authorize(...FINANCE_ROLES), async (req, res) => {
+router.get('/payroll', protect, authorize(...FINANCE_VIEW_ROLES), async (req, res) => {
   try {
     const { month, year, status } = req.query;
     const query = {};
@@ -292,7 +390,7 @@ router.get('/payroll', protect, authorize(...FINANCE_ROLES), async (req, res) =>
 });
 
 // @route POST /api/finance/payroll
-router.post('/payroll', protect, authorize(...FINANCE_ROLES), async (req, res) => {
+router.post('/payroll', protect, authorize(...FINANCE_EDIT_ROLES), async (req, res) => {
   try {
     const payroll = await Payroll.create({ ...req.body });
     res.status(201).json(payroll);
@@ -302,7 +400,7 @@ router.post('/payroll', protect, authorize(...FINANCE_ROLES), async (req, res) =
 });
 
 // @route PUT /api/finance/payroll/:id/process
-router.put('/payroll/:id/process', protect, authorize(...FINANCE_ROLES), async (req, res) => {
+router.put('/payroll/:id/process', protect, authorize(...FINANCE_EDIT_ROLES), async (req, res) => {
   try {
     const payroll = await Payroll.findByIdAndUpdate(
       req.params.id,
@@ -321,7 +419,7 @@ router.put('/payroll/:id/process', protect, authorize(...FINANCE_ROLES), async (
 // ═══════════════════════════════════════════════════════════════════════════
 
 // @route GET /api/finance/expenses
-router.get('/expenses', protect, authorize(...FINANCE_ROLES), async (req, res) => {
+router.get('/expenses', protect, authorize(...FINANCE_VIEW_ROLES), async (req, res) => {
   try {
     const { category, status, academicYear } = req.query;
     const query = {};
@@ -336,7 +434,7 @@ router.get('/expenses', protect, authorize(...FINANCE_ROLES), async (req, res) =
 });
 
 // @route POST /api/finance/expenses
-router.post('/expenses', protect, authorize(...FINANCE_ROLES, 'teacher'), async (req, res) => {
+router.post('/expenses', protect, authorize(...FINANCE_EDIT_ROLES, 'teacher'), async (req, res) => {
   try {
     const expense = await Expense.create({ ...req.body, submittedBy: req.user._id });
     res.status(201).json(expense);
@@ -346,7 +444,7 @@ router.post('/expenses', protect, authorize(...FINANCE_ROLES, 'teacher'), async 
 });
 
 // @route PUT /api/finance/expenses/:id/approve
-router.put('/expenses/:id/approve', protect, authorize(...FINANCE_ROLES), async (req, res) => {
+router.put('/expenses/:id/approve', protect, authorize(...FINANCE_EDIT_ROLES), async (req, res) => {
   try {
     const { action } = req.body; // "approve" or "reject"
     const expense = await Expense.findByIdAndUpdate(
@@ -412,7 +510,7 @@ router.post('/wallets/:studentId/transaction', protect, authorize('super-admin',
 // @route POST /api/finance/invoices/:id/remind-sms
 const { sendSMS } = require('../../messaging/services/smsService');
 
-router.post('/invoices/:id/remind-sms', protect, authorize(...FINANCE_ROLES), async (req, res) => {
+router.post('/invoices/:id/remind-sms', protect, authorize(...FINANCE_EDIT_ROLES), async (req, res) => {
   try {
     const invoice = await Invoice.findById(req.params.id)
       .populate({

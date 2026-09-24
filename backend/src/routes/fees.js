@@ -79,7 +79,7 @@ router.get('/structures', protect, async (req, res) => {
 // @route   POST /api/fees/payments
 // @desc    Record/pay student fees (Stage 1: Recorded)
 // @access  Private (Admin/Super-Admin/Bursar/Parent for self)
-router.post('/payments', protect, async (req, res) => {
+router.post('/payments', protect, authorize('super-admin', 'admin', 'bursar', 'parent', 'student'), async (req, res) => {
   const { studentId, term, academicYear, amountPaid, paymentMethod, transactionReference, remarks } = req.body;
 
   try {
