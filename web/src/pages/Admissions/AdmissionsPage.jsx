@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import SchoolHeader from '../../components/SchoolNav/SchoolHeader';
 import SchoolFooter from '../../components/SchoolNav/SchoolFooter';
+import { API_URL } from '../../services/api';
 import '../LandingPage/LandingPage.css';
 
 export default function AdmissionsPage({ isAuthenticated }) {
@@ -77,7 +78,7 @@ export default function AdmissionsPage({ isAuthenticated }) {
 
   // Fetch combinations and subjects on mount
   useEffect(() => {
-    fetch('/api/student-applications/meta/options')
+    fetch(`${API_URL}/student-applications/meta/options`)
       .then(res => res.json())
       .then(data => {
         if (data.combinations) setCombinationsList(data.combinations);
@@ -140,7 +141,7 @@ export default function AdmissionsPage({ isAuthenticated }) {
     formDataUpload.append('document', file);
 
     try {
-      const res = await fetch('/api/student-applications/upload', {
+      const res = await fetch(`${API_URL}/student-applications/upload`, {
         method: 'POST',
         body: formDataUpload
       });
@@ -242,7 +243,7 @@ export default function AdmissionsPage({ isAuthenticated }) {
     };
 
     try {
-      const res = await fetch('/api/student-applications/apply', {
+      const res = await fetch(`${API_URL}/student-applications/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -273,7 +274,7 @@ export default function AdmissionsPage({ isAuthenticated }) {
     setTrackingResult(null);
 
     try {
-      const res = await fetch(`/api/student-applications/track/${encodeURIComponent(trackingQuery.trim())}`);
+      const res = await fetch(`${API_URL}/student-applications/track/${encodeURIComponent(trackingQuery.trim())}`);
       const data = await res.json();
 
       if (!res.ok) {

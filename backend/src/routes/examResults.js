@@ -457,4 +457,60 @@ router.get('/analytics/class-performance', protect, authorize(...APPROVAL_ROLES,
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// LICOKA FINANCIAL EXAM GATE (Eligibility based on StudentPass / 40% threshold)
+// ═══════════════════════════════════════════════════════════════════════════════
+router.get('/eligibility/:classId/:term', protect, async (req, res) => {
+  try {
+    const { classId, term } = req.params;
+    const academicYear = req.query.academicYear ? parseInt(req.query.academicYear) : new Date().getFullYear();
+    const StudentPass = require('../models/StudentPass');
+
+    const students = await Student.find({ currentClass: classId })
+      .populate('user', 'name email')
+      .sort({ studentId: 1 });
+
+    const studentIds = students.map(s => s._id);
+    const passes = await StudentPass.find({
+      student: { $in: studentIds },
+      term,
+      academicYear
+    });
+
+    const passMap = new Map();
+    passes.forEach(p => passMap.set(String(p.student), p));
+
+    const eligibilityList = students.map(s => {
+      const pass = passMap.get(String(s._id));
+      const isCleared = pass && pass.isValid && pass.examPermitted;
+      return {
+        studentId: s._id,
+        regNumber: s.studentId,
+        admissionNumber: s.admissionNumber || s.studentId,
+        name: s.user ? s.user.name : s.studentId,
+        isPermitted: Boolean(isCleared),
+        passNumber: pass ? pass.passNumber : null,
+        percentageCleared: pass ? pass.percentageCleared : 0,
+        status: isCleared ? 'EXAM_PERMITTED' : 'PASS_WITHHELD',
+        reason: isCleared ? 'Financial requirement (>=40%) satisfied' : 'Fees cleared below 40% requirement'
+      };
+    });
+
+    const clearedCount = eligibilityList.filter(e => e.isPermitted).length;
+
+    res.json({
+      classId,
+      term,
+      academicYear,
+      totalStudents: students.length,
+      clearedForExams: clearedCount,
+      withheldCount: students.length - clearedCount,
+      students: eligibilityList
+    });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
 module.exports = router;
+

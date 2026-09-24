@@ -24,13 +24,20 @@ import {
   Calendar,
   UserCheck,
   Clock,
-  BookOpen
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  FileCheck2,
+  ShieldCheck,
+  Award
 } from 'lucide-react';
 import AdmissionsTab from './AdmissionsTab';
 import AcademicYearsTab from './AcademicYearsTab';
 import SubjectsTab from './SubjectsTab';
 import ClassesStreamsTab from './ClassesStreamsTab';
 import TeachersTab from './TeachersTab';
+import ClassPermitsTab from './ClassPermitsTab';
 import './AdminPortal.css';
 
 export default function AdminPortal({ onSwitchToLegacy }) {
@@ -41,6 +48,7 @@ export default function AdminPortal({ onSwitchToLegacy }) {
   // Deduce activeTab from URL path
   const getTabFromPath = (path) => {
     if (path.includes('/admin/admissions')) return 'admissions';
+    if (path.includes('/admin/permits')) return 'permits';
     if (path.includes('/admin/academic-years')) return 'academic-years';
     if (path.includes('/admin/subjects')) return 'subjects';
     if (path.includes('/admin/classes')) return 'classes';
@@ -51,6 +59,8 @@ export default function AdminPortal({ onSwitchToLegacy }) {
   };
 
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -92,6 +102,7 @@ export default function AdminPortal({ onSwitchToLegacy }) {
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
+    setMobileNavOpen(false);
     if (tab === 'overview') navigate('/admin');
     else navigate(`/admin/${tab}`);
   };
@@ -309,205 +320,368 @@ export default function AdminPortal({ onSwitchToLegacy }) {
         </div>
       )}
 
-      {/* Header & Live Topbar */}
-      <header className="ap-topbar">
-        <div className="ap-brand-group">
-          <div className="ap-brand-icon">
-            <School size={22} color="#c59b27" />
-          </div>
-          <div>
-            <div className="ap-brand-title">NDUGU ACADEMY</div>
-            <div className="ap-brand-sub">School Administration Portal</div>
-          </div>
-          <div 
-            onClick={() => handleTabChange('academic-years')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '6px 14px',
-              borderRadius: '9999px',
-              backgroundColor: '#0b1220',
-              border: 'none',
-              fontSize: '12px',
-              fontWeight: 700,
-              color: '#d8b257',
-              cursor: 'pointer'
-            }}
-            title="Click to manage Academic Years & Terms"
-          >
-            <Calendar size={13} color="#d8b257" />
-            <span>
-              {academicYearsList.find(y => y.isActive)?.label || '2026 Academic Year'}
-              {' '}&bull;{' '}
-              <strong style={{ color: '#34d399' }}>
-                {academicYearsList.find(y => y.isActive)?.terms?.find(t => t.isCurrent)?.name || 'Term I'}
-              </strong>
-            </span>
-          </div>
-        </div>
+      {/* Mobile Drawer Backdrop */}
+      {mobileNavOpen && (
+        <div 
+          className="ap-sidebar-overlay"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
 
-        {/* Single Page Navigation Tabs (Synced to URL) */}
-        <nav className="ap-nav-tabs">
-          <button
-            className={`ap-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => handleTabChange('overview')}
-          >
-            <LayoutDashboard size={16} />
-            <span>Overview</span>
-          </button>
-
-          <button
-            className={`ap-tab-btn ${activeTab === 'admissions' ? 'active' : ''}`}
-            onClick={() => handleTabChange('admissions')}
-          >
-            <UserCheck size={16} />
-            <span>Admissions</span>
-            {applicationsList.filter(a => a.status === 'pending').length > 0 ? (
-              <span style={{ 
-                fontSize: '11px', 
-                backgroundColor: '#c59b27', 
-                color: '#080e1a', 
-                fontWeight: 900, 
-                padding: '2px 8px', 
-                borderRadius: '9999px',
-                marginLeft: '4px' 
-              }}>
-                {applicationsList.filter(a => a.status === 'pending').length}
-              </span>
-            ) : (
-              applicationsList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({applicationsList.length})</span>
-            )}
-          </button>
-
-          <button
-            className={`ap-tab-btn ${activeTab === 'academic-years' ? 'active' : ''}`}
-            onClick={() => handleTabChange('academic-years')}
-          >
-            <Calendar size={16} />
-            <span>Years &amp; Terms</span>
-            {academicYearsList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({academicYearsList.length})</span>}
-          </button>
-
-          <button
-            className={`ap-tab-btn ${activeTab === 'subjects' ? 'active' : ''}`}
-            onClick={() => handleTabChange('subjects')}
-          >
-            <BookOpen size={16} />
-            <span>Subjects</span>
-            {subjectsList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({subjectsList.length})</span>}
-          </button>
-
-          <button
-            className={`ap-tab-btn ${activeTab === 'classes' ? 'active' : ''}`}
-            onClick={() => handleTabChange('classes')}
-          >
-            <Layers size={16} />
-            <span>Classes &amp; Streams</span>
-            {classesList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({classesList.length})</span>}
-          </button>
-
-          <button
-            className={`ap-tab-btn ${activeTab === 'teachers' ? 'active' : ''}`}
-            onClick={() => handleTabChange('teachers')}
-          >
-            <Users size={16} />
-            <span>Teachers</span>
-            {teachersList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({teachersList.length})</span>}
-          </button>
-
-          <button
-            className={`ap-tab-btn ${activeTab === 'students' ? 'active' : ''}`}
-            onClick={() => handleTabChange('students')}
-          >
-            <GraduationCap size={16} />
-            <span>Students</span>
-            {studentsList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({studentsList.length})</span>}
-          </button>
-
-          <button
-            className={`ap-tab-btn ${activeTab === 'users' ? 'active' : ''}`}
-            onClick={() => handleTabChange('users')}
-          >
-            <UserPlus size={16} />
-            <span>Personnel</span>
-            {usersList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({usersList.length})</span>}
-          </button>
-        </nav>
-
-        {/* Top Right Actions */}
-        <div className="ap-top-actions">
-          <div className="ap-user-chip">
-            <div className="ap-user-avatar">
-              {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
+      {/* 2-Column Dashboard Shell */}
+      <div className="ap-layout-shell">
+        {/* Left Sidebar Navigation */}
+        <aside className={`ap-sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'mobile-open' : ''}`}>
+          {/* Brand & Toggle */}
+          <div className="ap-sidebar-brand-wrapper">
+            <div className="ap-sidebar-brand" onClick={() => handleTabChange('overview')} title="Ndugu Academy Admin Portal">
+              <div className="ap-brand-icon">
+                <School size={22} color="#c59b27" />
+              </div>
+              {!sidebarCollapsed && (
+                <div className="ap-brand-text">
+                  <div className="ap-brand-title">NDUGU ACADEMY</div>
+                  <div className="ap-brand-sub">Admin Portal</div>
+                </div>
+              )}
             </div>
-            <div className="ap-user-info">
-              <span className="ap-user-name">{user?.name || 'Administrator'}</span>
-              <span className="ap-user-role">{user?.role || 'admin'}</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="ap-btn-secondary"
-            style={{ fontSize: '12px', padding: '6px 12px' }}
-            title="View Public School Website"
-          >
-            <Globe size={14} color="#d8b257" />
-            <span>School Website</span>
-          </button>
-
-          {onSwitchToLegacy && (
+            
             <button
               type="button"
-              onClick={onSwitchToLegacy}
-              className="ap-btn-legacy"
-              title="Open the previous multi-role prototype backup"
+              className="ap-sidebar-toggle-btn"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label="Toggle Sidebar"
             >
-              <ExternalLink size={14} />
-              <span>Legacy Backup</span>
+              {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
             </button>
+          </div>
+
+          {/* Quick User Identity Card in Sidebar */}
+          {!sidebarCollapsed ? (
+            <div className="ap-sidebar-profile">
+              <div className="ap-user-avatar">
+                {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
+              </div>
+              <div className="ap-sidebar-profile-info">
+                <div className="ap-user-name">{user?.name || 'Administrator'}</div>
+                <div className="ap-user-role">{user?.role || 'admin'}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="ap-sidebar-profile collapsed" title={`${user?.name || 'Administrator'} (${user?.role || 'admin'})`}>
+              <div className="ap-user-avatar">
+                {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
+              </div>
+            </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="ap-btn-logout"
-            title="Sign out of Portal"
-          >
-            <LogOut size={14} />
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </header>
+          {/* Grouped Sidebar Navigation Menu */}
+          <div className="ap-sidebar-nav">
+            {/* GROUP 1: COMMAND CENTER */}
+            <div className="ap-nav-group">
+              {!sidebarCollapsed && <div className="ap-nav-group-title">Command Center</div>}
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'overview' ? 'active' : ''}`}
+                onClick={() => handleTabChange('overview')}
+                title="Overview Dashboard"
+              >
+                <div className="ap-link-lead">
+                  <LayoutDashboard size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Overview</span>}
+                </div>
+              </button>
+            </div>
 
-      {/* Main Workspace */}
-      <main className="ap-workspace">
-        {/* Dynamic Action & Search Bar */}
-        <div className="ap-action-bar">
-          <div className="ap-page-header">
-            <h2>
-              {activeTab === 'overview' && 'School Administration Overview'}
-              {activeTab === 'admissions' && 'Student Admissions & Clearance Board'}
-              {activeTab === 'academic-years' && 'Academic Years & School Terms'}
-              {activeTab === 'subjects' && 'Curriculum & Subjects Catalog'}
-              {activeTab === 'classes' && 'Academic Classes & Stream Allocations'}
-              {activeTab === 'teachers' && 'Teaching Faculty Directory'}
-              {activeTab === 'students' && 'Student Enrollment Registry'}
-              {activeTab === 'users' && 'Staff & System Accounts'}
-            </h2>
-            <p>
-              {activeTab === 'overview' && 'Central command center for Ndugu Academy operations.'}
-              {activeTab === 'admissions' && 'Review applications, verify records, approve admissions, and issue official LCK- admission numbers.'}
-              {activeTab === 'academic-years' && 'Configure calendar sessions and toggle active Term I, Term II, or Term III.'}
-              {activeTab === 'subjects' && 'Manage O-Level (Compulsory/Optional) and A-Level (Principal/Subsidiary) subjects with UNEB codes.'}
-              {activeTab === 'classes' && 'Attach streams to academic classes, assign stream masters, and track capacities.'}
-              {activeTab === 'teachers' && 'Manage faculty profiles, contact records, qualifications, and teaching allocations.'}
-              {activeTab === 'students' && 'Ugandan curriculum student registry with auto-generated registration numbers.'}
-              {activeTab === 'users' && 'Manage authenticated accounts for instructors, heads of department, and bursars.'}
-            </p>
+            {/* GROUP 2: ADMISSIONS & CLEARANCE */}
+            <div className="ap-nav-group">
+              {!sidebarCollapsed && <div className="ap-nav-group-title">Admissions &amp; Clearance</div>}
+              
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'admissions' ? 'active' : ''}`}
+                onClick={() => handleTabChange('admissions')}
+                title="Admissions Board"
+              >
+                <div className="ap-link-lead">
+                  <UserCheck size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Admissions</span>}
+                </div>
+                {!sidebarCollapsed && (
+                  applicationsList.filter(a => a.status === 'pending').length > 0 ? (
+                    <span className="ap-badge-gold">
+                      {applicationsList.filter(a => a.status === 'pending').length} pending
+                    </span>
+                  ) : applicationsList.length > 0 ? (
+                    <span className="ap-badge-subtle">{applicationsList.length}</span>
+                  ) : null
+                )}
+              </button>
+
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'permits' ? 'active' : ''}`}
+                onClick={() => handleTabChange('permits')}
+                title="Class Entry Permits & Stream Allocations"
+              >
+                <div className="ap-link-lead">
+                  <FileCheck2 size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Class Permits</span>}
+                </div>
+                {!sidebarCollapsed && <span className="ap-badge-accent">PER-xxxx</span>}
+              </button>
+
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'students' ? 'active' : ''}`}
+                onClick={() => handleTabChange('students')}
+                title="Students Registry"
+              >
+                <div className="ap-link-lead">
+                  <GraduationCap size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Students Registry</span>}
+                </div>
+                {!sidebarCollapsed && studentsList.length > 0 && (
+                  <span className="ap-badge-subtle">{studentsList.length}</span>
+                )}
+              </button>
+            </div>
+
+            {/* GROUP 3: ACADEMIC CALENDAR & CURRICULUM */}
+            <div className="ap-nav-group">
+              {!sidebarCollapsed && <div className="ap-nav-group-title">Academics &amp; Faculty</div>}
+
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'academic-years' ? 'active' : ''}`}
+                onClick={() => handleTabChange('academic-years')}
+                title="Academic Years & Terms"
+              >
+                <div className="ap-link-lead">
+                  <Calendar size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Years &amp; Terms</span>}
+                </div>
+                {!sidebarCollapsed && academicYearsList.length > 0 && (
+                  <span className="ap-badge-subtle">
+                    {academicYearsList.find(y => y.isActive)?.terms?.find(t => t.isCurrent)?.name || 'Active'}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'subjects' ? 'active' : ''}`}
+                onClick={() => handleTabChange('subjects')}
+                title="Curriculum Subjects"
+              >
+                <div className="ap-link-lead">
+                  <BookOpen size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Curriculum Subjects</span>}
+                </div>
+                {!sidebarCollapsed && subjectsList.length > 0 && (
+                  <span className="ap-badge-subtle">{subjectsList.length}</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'classes' ? 'active' : ''}`}
+                onClick={() => handleTabChange('classes')}
+                title="Classes & Streams"
+              >
+                <div className="ap-link-lead">
+                  <Layers size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Classes &amp; Streams</span>}
+                </div>
+                {!sidebarCollapsed && classesList.length > 0 && (
+                  <span className="ap-badge-subtle">{classesList.length}</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'teachers' ? 'active' : ''}`}
+                onClick={() => handleTabChange('teachers')}
+                title="Teaching Faculty"
+              >
+                <div className="ap-link-lead">
+                  <Users size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Teaching Faculty</span>}
+                </div>
+                {!sidebarCollapsed && teachersList.length > 0 && (
+                  <span className="ap-badge-subtle">{teachersList.length}</span>
+                )}
+              </button>
+            </div>
+
+            {/* GROUP 4: ADMINISTRATION & PERSONNEL */}
+            <div className="ap-nav-group">
+              {!sidebarCollapsed && <div className="ap-nav-group-title">Staff &amp; Access</div>}
+
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'users' ? 'active' : ''}`}
+                onClick={() => handleTabChange('users')}
+                title="Staff Accounts"
+              >
+                <div className="ap-link-lead">
+                  <UserPlus size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Staff &amp; Personnel</span>}
+                </div>
+                {!sidebarCollapsed && usersList.length > 0 && (
+                  <span className="ap-badge-subtle">{usersList.length}</span>
+                )}
+              </button>
+            </div>
           </div>
+
+          {/* Sidebar Footer */}
+          <div className="ap-sidebar-footer">
+            {!sidebarCollapsed && (
+              <div 
+                className="ap-sidebar-term-pill"
+                onClick={() => handleTabChange('academic-years')}
+                title="Manage Academic Calendar"
+              >
+                <div className="ap-pulse-dot" />
+                <div className="ap-term-pill-content">
+                  <span className="ap-term-pill-year">
+                    {academicYearsList.find(y => y.isActive)?.label || '2026 Academic Year'}
+                  </span>
+                  <span className="ap-term-pill-term">
+                    {academicYearsList.find(y => y.isActive)?.terms?.find(t => t.isCurrent)?.name || 'Term I'} Active
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="ap-sidebar-footer-actions">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="ap-sidebar-action-btn"
+                title="Public School Website"
+              >
+                <Globe size={16} color="#d8b257" />
+                {!sidebarCollapsed && <span>School Website</span>}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="ap-sidebar-action-btn ap-logout-action"
+                title="Sign out of Portal"
+              >
+                <LogOut size={16} />
+                {!sidebarCollapsed && <span>Sign Out</span>}
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* Content Shell: Header + Workspace */}
+        <div className="ap-main-canvas">
+          {/* Executive Topbar */}
+          <header className="ap-topbar">
+            <div className="ap-topbar-left">
+              <button
+                type="button"
+                className="ap-mobile-menu-btn"
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Open Navigation Menu"
+              >
+                <Menu size={20} />
+              </button>
+
+              <div className="ap-topbar-breadcrumb">
+                <span className="ap-breadcrumb-lead">Admin Console</span>
+                <span className="ap-breadcrumb-sep">/</span>
+                <span className="ap-breadcrumb-active">
+                  {activeTab === 'overview' && 'Overview Dashboard'}
+                  {activeTab === 'admissions' && 'Admissions & Clearance'}
+                  {activeTab === 'permits' && 'Class Entry Permits'}
+                  {activeTab === 'academic-years' && 'Academic Years & Terms'}
+                  {activeTab === 'subjects' && 'Curriculum Subjects'}
+                  {activeTab === 'classes' && 'Classes & Streams'}
+                  {activeTab === 'teachers' && 'Teaching Faculty'}
+                  {activeTab === 'students' && 'Students Registry'}
+                  {activeTab === 'users' && 'Staff Accounts'}
+                </span>
+              </div>
+            </div>
+
+            <div className="ap-topbar-right">
+              {/* System Health Status */}
+              <div className="ap-health-badge" title={`API Latency: ${systemHealth.latency}ms`}>
+                <div className="ap-pulse-dot" />
+                <span>{systemHealth.status} ({systemHealth.latency}ms)</span>
+              </div>
+
+              {/* Refresh / Sync Records */}
+              <button
+                type="button"
+                onClick={() => fetchLiveData(true)}
+                className="ap-btn-secondary ap-btn-compact"
+                title="Sync live records from server"
+              >
+                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                <span className="ap-hide-mobile">{refreshing ? 'Syncing...' : 'Sync'}</span>
+              </button>
+
+              {onSwitchToLegacy && (
+                <button
+                  type="button"
+                  onClick={onSwitchToLegacy}
+                  className="ap-btn-legacy ap-btn-compact"
+                  title="Open legacy multi-tab backup"
+                >
+                  <ExternalLink size={14} />
+                  <span className="ap-hide-mobile">Legacy</span>
+                </button>
+              )}
+
+              {/* User Avatar Chip */}
+              <div className="ap-user-chip">
+                <div className="ap-user-avatar">
+                  {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
+                </div>
+                <div className="ap-user-info ap-hide-mobile">
+                  <span className="ap-user-name">{user?.name || 'Administrator'}</span>
+                  <span className="ap-user-role">{user?.role || 'admin'}</span>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Workspace */}
+          <main className="ap-workspace">
+            {/* Dynamic Action & Search Bar */}
+            <div className="ap-action-bar">
+              <div className="ap-page-header">
+                <h2>
+                  {activeTab === 'overview' && 'School Administration Overview'}
+                  {activeTab === 'admissions' && 'Student Admissions & Clearance Board'}
+                  {activeTab === 'permits' && 'Class Entry Permits & Stream Allocations'}
+                  {activeTab === 'academic-years' && 'Academic Years & School Terms'}
+                  {activeTab === 'subjects' && 'Curriculum & Subjects Catalog'}
+                  {activeTab === 'classes' && 'Academic Classes & Stream Allocations'}
+                  {activeTab === 'teachers' && 'Teaching Faculty Directory'}
+                  {activeTab === 'students' && 'Student Enrollment Registry'}
+                  {activeTab === 'users' && 'Staff & System Accounts'}
+                </h2>
+                <p>
+                  {activeTab === 'overview' && 'Central command center for Ndugu Academy operations.'}
+                  {activeTab === 'admissions' && 'Review applications, verify records, approve admissions, and issue official LCK- admission numbers.'}
+                  {activeTab === 'permits' && 'Generate official Licoka-style class permits (PER-xxxx), verify 40% fee clearance status, assign streams (Green/White/Blue), and print student permit passes.'}
+                  {activeTab === 'academic-years' && 'Configure calendar sessions and toggle active Term I, Term II, or Term III.'}
+                  {activeTab === 'subjects' && 'Manage O-Level (Compulsory/Optional) and A-Level (Principal/Subsidiary) subjects with UNEB codes.'}
+                  {activeTab === 'classes' && 'Attach streams to academic classes, assign stream masters, and track capacities.'}
+                  {activeTab === 'teachers' && 'Manage faculty profiles, contact records, qualifications, and teaching allocations.'}
+                  {activeTab === 'students' && 'Ugandan curriculum student registry with auto-generated registration numbers.'}
+                  {activeTab === 'users' && 'Manage authenticated accounts for instructors, heads of department, and bursars.'}
+                </p>
+              </div>
 
           <div className="ap-controls-group">
             {['users', 'students'].includes(activeTab) && (
@@ -802,6 +976,11 @@ export default function AdminPortal({ onSwitchToLegacy }) {
           />
         )}
 
+        {/* TAB: CLASS ENTRY PERMITS (LICOKA CLEARANCE) */}
+        {activeTab === 'permits' && (
+          <ClassPermitsTab />
+        )}
+
         {/* TAB: ACADEMIC YEARS & TERMS */}
         {activeTab === 'academic-years' && (
           <AcademicYearsTab
@@ -954,6 +1133,8 @@ export default function AdminPortal({ onSwitchToLegacy }) {
           </div>
         )}
       </main>
+        </div> {/* /.ap-main-canvas */}
+      </div> {/* /.ap-layout-shell */}
 
       {/* MODAL 1: ADD USER — NO CARD BORDER */}
       {showAddUserModal && (

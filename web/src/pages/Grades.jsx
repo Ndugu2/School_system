@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { api, API_URL } from '../services/api';
 
 const getUgandaGrade = (marks) => {
   if (marks >= 80) return 'D1';
@@ -156,7 +156,7 @@ export default function Grades() {
   const handleDownloadReportCard = async () => {
     if (!activeReportStudent) return;
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = API_URL;
       const token = localStorage.getItem('token');
       const response = await fetch(`${apiUrl}/grades/report-card/${activeReportStudent._id}/${encodeURIComponent(term)}/pdf?academicYear=${new Date().getFullYear()}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

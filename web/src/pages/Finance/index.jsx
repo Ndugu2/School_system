@@ -5,14 +5,16 @@ import AccountingCenter from './AccountingCenter';
 import InvoiceManager from './InvoiceManager';
 import PayrollManager from './PayrollManager';
 import ExpenseTracker from './ExpenseTracker';
-import { BarChart2, FileText, Landmark, Users, Receipt } from 'lucide-react';
+import LicokaGatekeeper from './LicokaGatekeeper';
+import { BarChart2, FileText, Landmark, Users, Receipt, ShieldCheck } from 'lucide-react';
 
 const tabs = [
-  { id: 'overview',  label: 'Financial Overview',  icon: BarChart2 },
-  { id: 'accounting', label: 'Accounting Center', icon: Landmark },
-  { id: 'invoices',  label: 'Receivables Ledger',  icon: FileText  },
-  { id: 'payroll',   label: 'Payroll Ledger',   icon: Users     },
-  { id: 'expenses',  label: 'Payables Ledger',  icon: Receipt   },
+  { id: 'overview',   label: 'Financial Overview',       icon: BarChart2 },
+  { id: 'gatekeeper', label: 'Passes & Meal Cards (40%)', icon: ShieldCheck },
+  { id: 'accounting', label: 'Accounting Center',        icon: Landmark },
+  { id: 'invoices',   label: 'Receivables Ledger',       icon: FileText  },
+  { id: 'payroll',    label: 'Payroll Ledger',            icon: Users     },
+  { id: 'expenses',   label: 'Payables Ledger',           icon: Receipt   },
 ];
 
 export default function Finance() {
@@ -22,12 +24,13 @@ export default function Finance() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'overview':  return <FinanceDashboard setActiveFinanceTab={setActiveTab} readOnly={readOnly} />;
+      case 'overview':   return <FinanceDashboard setActiveFinanceTab={setActiveTab} readOnly={readOnly} />;
+      case 'gatekeeper': return <LicokaGatekeeper readOnly={readOnly} />;
       case 'accounting': return <AccountingCenter readOnly={readOnly} />;
-      case 'invoices':  return <InvoiceManager readOnly={readOnly} />;
-      case 'payroll':   return <PayrollManager readOnly={readOnly} />;
-      case 'expenses':  return <ExpenseTracker readOnly={readOnly} />;
-      default:          return <FinanceDashboard setActiveFinanceTab={setActiveTab} readOnly={readOnly} />;
+      case 'invoices':   return <InvoiceManager readOnly={readOnly} />;
+      case 'payroll':    return <PayrollManager readOnly={readOnly} />;
+      case 'expenses':   return <ExpenseTracker readOnly={readOnly} />;
+      default:           return <FinanceDashboard setActiveFinanceTab={setActiveTab} readOnly={readOnly} />;
     }
   };
 
