@@ -5,11 +5,26 @@ const path = require('path');
 const os = require('os');
 const cron = require('node-cron');
 const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const mongoUri = process.env.MONGODB_URI;
+
+const missingSecrets = ['JWT_SECRET', 'JWT_REFRESH_SECRET'].filter(name => !process.env[name]);
+if (missingSecrets.length > 0) {
+  console.error(`❌ Missing required security configuration: ${missingSecrets.join(', ')}`);
+  process.exit(1);
+}
+
+if (process.env.NODE_ENV === 'production') {
+  const weakSecrets = ['JWT_SECRET', 'JWT_REFRESH_SECRET'].filter(name => process.env[name].length < 32);
+  if (weakSecrets.length > 0) {
+    console.error(`❌ Production JWT secrets must be at least 32 characters: ${weakSecrets.join(', ')}`);
+    process.exit(1);
+  }
+}
 
 // ── Database Connection (Cached for Serverless & Standalone) ────────────────
 let cachedConnection = null;
@@ -34,6 +49,7 @@ const connectDB = async () => {
 // Trust reverse proxies (Vercel, Render, Nginx) for accurate IP rate limiting
 app.set('trust proxy', 1);
 
+app.use(helmet());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -99,11 +115,12 @@ app.use((req, res, next) => {
 
 // ── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    message: 'Ndugu Academy API is healthy',
+  const databaseReady = mongoose.connection.readyState === 1;
+  res.status(databaseReady ? 200 : 503).json({
+    status: databaseReady ? 'OK' : 'DEGRADED',
+    database: databaseReady ? 'connected' : 'disconnected',
+    message: databaseReady ? 'Ndugu Academy API is healthy' : 'Database connection is not ready',
     environment: process.env.VERCEL ? 'vercel-serverless' : 'standalone',
-    dbConnected: mongoose.connection.readyState === 1,
     timestamp: new Date()
   });
 });
@@ -237,7 +254,10 @@ if (process.env.VERCEL !== '1') {
 // ── Error Handler ─────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(err.status || 500).json({ error: { message: err.message || 'Internal Server Error' } });
+  const message = process.env.NODE_ENV === 'production'
+    ? 'Internal Server Error'
+    : (err.message || 'Internal Server Error');
+  res.status(err.status || 500).json({ error: { message } });
 });
 
 // ── Standalone Server Starter ────────────────────────────────────────────────

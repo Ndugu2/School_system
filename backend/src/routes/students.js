@@ -8,6 +8,7 @@ const StudentPhoto = require('../models/StudentPhoto');
 const AcademicPerformance = require('../models/AcademicPerformance');
 const Teacher = require('../models/Teacher');
 const { protect, authorize } = require('../middleware/auth');
+const { logAudit } = require('../middleware/auditLog');
 const router = express.Router();
 
 // Helper to generate unique student registration number
@@ -148,6 +149,22 @@ router.get('/', protect, authorize('super-admin', 'admin', 'registrar', 'supervi
       .populate('user', '-password')
       .populate('currentClass');
     res.status(200).json(students);
+  } catch (error) {
+    res.status(500).json({ error: { message: error.message } });
+  }
+});
+
+// @route   GET /api/students/alumni/directory
+// @desc    Get alumni and graduated students directory
+// @access  Private
+router.get('/alumni/directory', protect, async (req, res) => {
+  try {
+    const alumni = await Student.find({ studentStatus: { $in: ['graduated', 'alumni'] } })
+      .populate('user', 'name email')
+      .populate('currentClass', 'name level')
+      .sort({ 'graduationDetails.graduationYear': -1 });
+
+    res.json(alumni);
   } catch (error) {
     res.status(500).json({ error: { message: error.message } });
   }
@@ -749,6 +766,14 @@ router.post('/:id/transfer', protect, authorize('admin', 'super-admin', 'registr
 
     await student.save();
 
+    await logAudit(req, {
+      action: 'student.transferred',
+      module: 'students',
+      recordId: student._id,
+      recordRef: student.studentId,
+      description: `Student ${student.studentId} transferred to ${student.transferDetails.destinationSchool}`,
+    });
+
     res.json({ message: 'Student transfer clearance completed and archived', student });
   } catch (error) {
     res.status(500).json({ error: { message: error.message } });
@@ -790,6 +815,9 @@ router.post('/:id/graduate', protect, authorize('admin', 'super-admin', 'academi
   try {
     const student = await Student.findById(req.params.id);
     if (!student) return res.status(404).json({ error: { message: 'Student not found' } });
+    if (student.currentClassLevel !== 'S6') {
+      return res.status(400).json({ error: { message: 'Only S6 students can be graduated' } });
+    }
 
     student.studentStatus = 'graduated';
     student.graduationDetails = {
@@ -802,23 +830,16 @@ router.post('/:id/graduate', protect, authorize('admin', 'super-admin', 'academi
 
     await student.save();
 
+    await logAudit(req, {
+      action: 'student.status-changed',
+      module: 'students',
+      recordId: student._id,
+      recordRef: student.studentId,
+      newValue: { status: 'graduated', graduationYear: student.graduationDetails.graduationYear },
+      description: `Student ${student.studentId} graduated and was added to the alumni directory`,
+    });
+
     res.json({ message: 'Student successfully graduated and enrolled in Alumni database', student });
-  } catch (error) {
-    res.status(500).json({ error: { message: error.message } });
-  }
-});
-
-// @route   GET /api/students/alumni/directory
-// @desc    Get alumni and graduated students directory
-// @access  Private
-router.get('/alumni/directory', protect, async (req, res) => {
-  try {
-    const alumni = await Student.find({ studentStatus: { $in: ['graduated', 'alumni'] } })
-      .populate('user', 'name email')
-      .populate('currentClass', 'name level')
-      .sort({ 'graduationDetails.graduationYear': -1 });
-
-    res.json(alumni);
   } catch (error) {
     res.status(500).json({ error: { message: error.message } });
   }

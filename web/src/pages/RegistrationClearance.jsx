@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import ClassPermitsTab from './AdminPortal/ClassPermitsTab';
 import { 
   CheckCircle, Clock, AlertTriangle, XCircle, ArrowRight, 
   UserCheck, ShieldCheck, FileCheck, RefreshCw, Send, 
-  GraduationCap, MoveRight, LogOut, Filter, ChevronRight, User, Award
+  GraduationCap, MoveRight, LogOut, Filter, ChevronRight, User
 } from 'lucide-react';
 
 export default function RegistrationClearance({ onBackToDirectory }) {
@@ -15,9 +14,10 @@ export default function RegistrationClearance({ onBackToDirectory }) {
   const [classes, setClasses] = useState([]);
   const [academicYears, setAcademicYears] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('Term 1');
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
 
   // Promotion Form State
   const [promotionForm, setPromotionForm] = useState({
@@ -35,17 +35,22 @@ export default function RegistrationClearance({ onBackToDirectory }) {
   const [graduationForm, setGraduationForm] = useState({ graduationYear: new Date().getFullYear(), uaceIndexNumber: '', award: 'UACE Certificate' });
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showGradModal, setShowGradModal] = useState(false);
+  const [rejectionTarget, setRejectionTarget] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const fetchRegistrations = async () => {
     setLoading(true);
+    setError('');
     try {
       const params = new URLSearchParams();
       if (selectedClass) params.append('class', selectedClass);
       if (selectedTerm) params.append('term', selectedTerm);
+      if (selectedAcademicYear) params.append('academicYear', selectedAcademicYear);
       const data = await api.get(`/registrations?${params.toString()}`);
       setRegistrations(data.registrations || []);
     } catch (err) {
       console.error('Error fetching registrations:', err);
+      setError(err.message || 'Unable to load registrations. Check that the server is running.');
     } finally {
       setLoading(false);
     }
@@ -57,6 +62,7 @@ export default function RegistrationClearance({ onBackToDirectory }) {
       setOutstandingReport(data.report || []);
     } catch (err) {
       console.error('Error fetching outstanding requirements:', err);
+      setError(err.message || 'Unable to load outstanding requirements.');
     }
   };
 
@@ -66,6 +72,7 @@ export default function RegistrationClearance({ onBackToDirectory }) {
       setAlumniList(data || []);
     } catch (err) {
       console.error('Error fetching alumni:', err);
+      setError(err.message || 'Unable to load the alumni directory.');
     }
   };
 
@@ -78,6 +85,7 @@ export default function RegistrationClearance({ onBackToDirectory }) {
       setClasses(cls || []);
       setAcademicYears(yrs || []);
       if (yrs?.length > 0) {
+        setSelectedAcademicYear(prev => prev || yrs[0]._id);
         setPromotionForm(prev => ({
           ...prev,
           fromAcademicYear: yrs[0]._id,
@@ -89,6 +97,7 @@ export default function RegistrationClearance({ onBackToDirectory }) {
       }
     } catch (err) {
       console.error('Error loading base setup:', err);
+      setError(err.message || 'Unable to load classes and academic years.');
     }
   };
 
@@ -100,7 +109,7 @@ export default function RegistrationClearance({ onBackToDirectory }) {
     if (activeTab === 'pipeline') fetchRegistrations();
     if (activeTab === 'requirements') fetchOutstandingReport();
     if (activeTab === 'lifecycle') fetchAlumni();
-  }, [activeTab, selectedClass, selectedTerm]);
+  }, [activeTab, selectedClass, selectedTerm, selectedAcademicYear]);
 
   // Step Clearance Handler
   const handleClearanceStep = async (regId, step, payload = {}) => {
@@ -197,10 +206,33 @@ export default function RegistrationClearance({ onBackToDirectory }) {
             Manage separate enrollment vs. active term clearance, physical school requirements verification, promotions, and graduation.
           </p>
         </div>
-        <button onClick={() => { fetchRegistrations(); fetchOutstandingReport(); }} style={styles.refreshBtn}>
+        <button onClick={() => {
+          if (activeTab === 'pipeline') fetchRegistrations();
+          if (activeTab === 'requirements') fetchOutstandingReport();
+          if (activeTab === 'lifecycle') fetchAlumni();
+        }} style={styles.refreshBtn} disabled={loading}>
           <RefreshCw size={16} /> Refresh
         </button>
       </div>
+
+      {error && (
+        <div role="alert" style={styles.errorBanner}>
+          <AlertTriangle size={16} />
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setError('');
+              if (activeTab === 'pipeline') fetchRegistrations();
+              if (activeTab === 'requirements') fetchOutstandingReport();
+              if (activeTab === 'lifecycle') fetchAlumni();
+            }}
+            style={styles.retryBtn}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Navigation Tabs */}
       <div style={styles.tabsNav}>
@@ -222,12 +254,6 @@ export default function RegistrationClearance({ onBackToDirectory }) {
         >
           <GraduationCap size={18} /> 3. Promotions, Transfers & Alumni
         </button>
-        <button 
-          onClick={() => setActiveTab('permits')}
-          style={{ ...styles.tabBtn, ...(activeTab === 'permits' ? styles.activeTabBtn : {}) }}
-        >
-          <Award size={18} /> 4. Class Entry Permits (PER-xxxx)
-        </button>
       </div>
 
       {/* TAB 1: REGISTRATION PIPELINE */}
@@ -244,6 +270,20 @@ export default function RegistrationClearance({ onBackToDirectory }) {
               >
                 <option value="">All Classes</option>
                 {classes.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+              </select>
+            </div>
+
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Academic Year:</label>
+              <select
+                value={selectedAcademicYear}
+                onChange={(e) => setSelectedAcademicYear(e.target.value)}
+                style={styles.selectInput}
+              >
+                <option value="">All Years</option>
+                {academicYears.map(year => (
+                  <option key={year._id} value={year._id}>{year.year} ({year.label || 'Standard'})</option>
+                ))}
               </select>
             </div>
 
@@ -313,7 +353,13 @@ export default function RegistrationClearance({ onBackToDirectory }) {
                 </tr>
               </thead>
               <tbody>
-                {registrations.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-secondary)' }}>
+                      Loading registrations...
+                    </td>
+                  </tr>
+                ) : registrations.length === 0 ? (
                   <tr>
                     <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-secondary)' }}>
                       No students found for this class and term.
@@ -475,8 +521,8 @@ export default function RegistrationClearance({ onBackToDirectory }) {
                           </button>
                           <button 
                             onClick={() => {
-                              const reason = prompt('Enter rejection reason (e.g. Broken geometry set, wrong edition):');
-                              if (reason) handleRequirementStatus(req._id, 'rejected', reason);
+                              setRejectionTarget(req);
+                              setRejectionReason('');
                             }}
                             style={{ ...styles.miniBtn, background: '#ef4444', color: '#fff' }}
                             title="Reject Item"
@@ -596,9 +642,38 @@ export default function RegistrationClearance({ onBackToDirectory }) {
         </div>
       )}
 
-      {/* TAB 4: LICOKA CLASS ENTRY PERMITS */}
-      {activeTab === 'permits' && (
-        <ClassPermitsTab />
+      {/* REQUIREMENT REJECTION MODAL */}
+      {rejectionTarget && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContent} role="dialog" aria-modal="true" aria-labelledby="rejection-title">
+            <h3 id="rejection-title">Reject Requirement</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              Add a reason so the student or guardian knows what needs to be corrected.
+            </p>
+            <form onSubmit={(event) => {
+              event.preventDefault();
+              if (!rejectionReason.trim()) return;
+              handleRequirementStatus(rejectionTarget._id, 'rejected', rejectionReason.trim());
+              setRejectionTarget(null);
+              setRejectionReason('');
+            }}>
+              <label style={styles.formLabel} htmlFor="rejection-reason">Reason</label>
+              <textarea
+                id="rejection-reason"
+                required
+                autoFocus
+                value={rejectionReason}
+                onChange={(event) => setRejectionReason(event.target.value)}
+                placeholder="e.g. Broken geometry set or wrong edition"
+                style={{ ...styles.textInput, minHeight: '80px', resize: 'vertical' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setRejectionTarget(null)} style={styles.secondaryBtn}>Cancel</button>
+                <button type="submit" style={{ ...styles.primaryActionBtn, background: '#ef4444' }}>Reject Requirement</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* TRANSFER CLEARANCE MODAL */}
@@ -727,6 +802,28 @@ const styles = {
     color: 'var(--text-primary)',
     cursor: 'pointer',
     fontSize: '13px',
+  },
+  errorBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 14px',
+    marginBottom: '16px',
+    borderRadius: '8px',
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
+    color: '#b91c1c',
+    fontSize: '13px',
+  },
+  retryBtn: {
+    marginLeft: 'auto',
+    padding: '5px 10px',
+    border: '1px solid #fca5a5',
+    borderRadius: '6px',
+    background: '#fff',
+    color: '#b91c1c',
+    cursor: 'pointer',
+    fontWeight: '600',
   },
   tabsNav: {
     display: 'flex',

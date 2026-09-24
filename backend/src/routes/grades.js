@@ -26,16 +26,14 @@ const calculateUgGrade = (marks) => {
 
 const reportCardToken = (studentId, term, academicYear) => {
   const payload = Buffer.from(JSON.stringify({ studentId, term, academicYear })).toString('base64url');
-  const secret = process.env.JWT_SECRET || 'development-report-card-secret';
-  const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  const signature = crypto.createHmac('sha256', process.env.JWT_SECRET).update(payload).digest('base64url');
   return `${payload}.${signature}`;
 };
 
 const readReportCardToken = (token) => {
   const [payload, signature] = token.split('.');
   if (!payload || !signature) return null;
-  const secret = process.env.JWT_SECRET || 'development-report-card-secret';
-  const expected = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  const expected = crypto.createHmac('sha256', process.env.JWT_SECRET).update(payload).digest('base64url');
   if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
   try { return JSON.parse(Buffer.from(payload, 'base64url').toString()); } catch { return null; }
 };
