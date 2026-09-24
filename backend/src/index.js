@@ -123,7 +123,6 @@ app.use('/api/fees',            require('./routes/fees'));
 app.use('/api/academic-years',      require('./routes/academicYears'));
 app.use('/api/registrations',       require('./routes/registrations'));
 app.use('/api/requirements',        require('./routes/requirements'));
-app.use('/api/student-applications', require('./routes/studentApplications'));
 app.use('/api/permits',              require('./routes/permits'));
 
 // ── Audit Log (read-only, super-admin) ───────────────────────────────────────
