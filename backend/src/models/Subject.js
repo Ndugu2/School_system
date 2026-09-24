@@ -13,19 +13,31 @@ const subjectSchema = new mongoose.Schema({
     uppercase: true
   },
 
+  level: {
+    type: String,
+    enum: ['O', 'A', 'O-Level', 'A-Level'],
+    default: 'O'
+  },
+
   // ── Classification ─────────────────────────────────────────────────────────────
   type: {
     type: String,
     enum: [
-      'compulsory',   // All students must take (e.g. English, Mathematics)
-      'elective',     // Student selects from a group
-      'subsidiary',   // A-level subsidiary subject
-      'general',      // General paper (A-level)
+      'compulsory',   // O-Level compulsory (e.g. English, Mathematics)
+      'optional',     // O-Level optional / elective
+      'principal',    // A-Level principal subject (e.g. Physics, Economics)
+      'subsidiary',   // A-Level subsidiary subject (e.g. Sub-Math, Sub-ICT, GP)
+      'elective',     // Elective
+      'general',      // General paper
     ],
     default: 'compulsory'
   },
+  category: {
+    type: String,
+    enum: ['compulsory', 'optional', 'principal', 'subsidiary', 'elective', 'general'],
+    default: 'compulsory'
+  },
   isCompulsory: {
-    // Quick flag: true = all students in applicable classes must take this
     type: Boolean,
     default: true
   },
