@@ -6,8 +6,8 @@ const router = express.Router();
 
 // @route   POST /api/teachers
 // @desc    Add a teacher profile (Creates User account + Teacher profile)
-// @access  Private (Admin/Super-Admin)
-router.post('/', protect, authorize('admin', 'super-admin'), async (req, res) => {
+// @access  Private (Admin/Super-Admin/Headteacher/DOS)
+router.post('/', protect, authorize('admin', 'super-admin', 'headteacher', 'dos', 'academic-admin'), async (req, res) => {
   const { name, email, password, qualification, phoneNumber, subjects, classes } = req.body;
 
   try {
@@ -45,7 +45,7 @@ router.post('/', protect, authorize('admin', 'super-admin'), async (req, res) =>
 // @route   GET /api/teachers
 // @desc    Get all teachers
 // @access  Private
-router.get('/', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy-head', 'academic-admin'), async (req, res) => {
+router.get('/', protect, authorize('admin', 'super-admin', 'headteacher', 'dos', 'supervisor', 'deputy-head', 'academic-admin', 'teacher', 'registrar'), async (req, res) => {
   try {
     const teachers = await Teacher.find({})
       .populate('user', '-password')

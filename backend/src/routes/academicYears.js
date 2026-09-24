@@ -60,11 +60,11 @@ router.post('/', protect, authorize(...ADMIN_ROLES), async (req, res) => {
 
     const academicYear = await AcademicYear.create({
       year,
-      label: label || String(year),
+      label: label || `${year} Academic Year`,
       terms: terms || [
-        { name: 'Term 1', isActive: false, isCurrent: false },
-        { name: 'Term 2', isActive: false, isCurrent: false },
-        { name: 'Term 3', isActive: false, isCurrent: false },
+        { name: 'Term I', isActive: true, isCurrent: true },
+        { name: 'Term II', isActive: false, isCurrent: false },
+        { name: 'Term III', isActive: false, isCurrent: false },
       ],
       notes,
       createdBy: req.user._id,
@@ -93,6 +93,19 @@ router.put('/:id', protect, authorize(...ADMIN_ROLES), async (req, res) => {
     res.json(year);
   } catch (err) {
     res.status(400).json({ error: { message: err.message } });
+  }
+});
+
+// @desc  Delete an academic year
+// @route DELETE /api/academic-years/:id
+router.delete('/:id', protect, authorize('super-admin', 'admin'), async (req, res) => {
+  try {
+    const year = await AcademicYear.findById(req.params.id);
+    if (!year) return res.status(404).json({ error: { message: 'Academic year not found' } });
+    await year.deleteOne();
+    res.json({ message: `Academic year ${year.year} deleted successfully` });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
   }
 });
 

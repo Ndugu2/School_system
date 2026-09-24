@@ -23,9 +23,14 @@ import {
   Globe,
   Calendar,
   UserCheck,
-  Clock
+  Clock,
+  BookOpen
 } from 'lucide-react';
 import AdmissionsTab from './AdmissionsTab';
+import AcademicYearsTab from './AcademicYearsTab';
+import SubjectsTab from './SubjectsTab';
+import ClassesStreamsTab from './ClassesStreamsTab';
+import TeachersTab from './TeachersTab';
 import './AdminPortal.css';
 
 export default function AdminPortal({ onSwitchToLegacy }) {
@@ -33,12 +38,15 @@ export default function AdminPortal({ onSwitchToLegacy }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Deduce activeTab from URL path (/admin/admissions, /admin/users, /admin/classes, /admin/students, or default /admin)
+  // Deduce activeTab from URL path
   const getTabFromPath = (path) => {
     if (path.includes('/admin/admissions')) return 'admissions';
-    if (path.includes('/admin/users')) return 'users';
+    if (path.includes('/admin/academic-years')) return 'academic-years';
+    if (path.includes('/admin/subjects')) return 'subjects';
     if (path.includes('/admin/classes')) return 'classes';
+    if (path.includes('/admin/teachers')) return 'teachers';
     if (path.includes('/admin/students')) return 'students';
+    if (path.includes('/admin/users')) return 'users';
     return 'overview';
   };
 
@@ -53,6 +61,9 @@ export default function AdminPortal({ onSwitchToLegacy }) {
   const [classesList, setClassesList] = useState([]);
   const [studentsList, setStudentsList] = useState([]);
   const [applicationsList, setApplicationsList] = useState([]);
+  const [academicYearsList, setAcademicYearsList] = useState([]);
+  const [subjectsList, setSubjectsList] = useState([]);
+  const [teachersList, setTeachersList] = useState([]);
   const [systemHealth, setSystemHealth] = useState({ status: 'Operational', latency: 42 });
 
   // Modal States
@@ -93,12 +104,15 @@ export default function AdminPortal({ onSwitchToLegacy }) {
     try {
       const startTime = performance.now();
       
-      const [usersRes, classesRes, studentsRes, healthRes, appsRes] = await Promise.allSettled([
+      const [usersRes, classesRes, studentsRes, healthRes, appsRes, yearsRes, subsRes, teachersRes] = await Promise.allSettled([
         api.get('/auth/users'),
         api.get('/classes'),
         api.get('/students'),
         api.get('/health'),
-        api.get('/student-applications')
+        api.get('/student-applications'),
+        api.get('/academic-years'),
+        api.get('/subjects'),
+        api.get('/teachers')
       ]);
 
       const roundtrip = Math.round(performance.now() - startTime);
@@ -115,6 +129,15 @@ export default function AdminPortal({ onSwitchToLegacy }) {
       }
       if (appsRes.status === 'fulfilled' && Array.isArray(appsRes.value)) {
         setApplicationsList(appsRes.value);
+      }
+      if (yearsRes.status === 'fulfilled' && Array.isArray(yearsRes.value)) {
+        setAcademicYearsList(yearsRes.value);
+      }
+      if (subsRes.status === 'fulfilled' && Array.isArray(subsRes.value)) {
+        setSubjectsList(subsRes.value);
+      }
+      if (teachersRes.status === 'fulfilled' && Array.isArray(teachersRes.value)) {
+        setTeachersList(teachersRes.value);
       }
       if (healthRes.status === 'fulfilled') {
         setSystemHealth({
@@ -296,20 +319,31 @@ export default function AdminPortal({ onSwitchToLegacy }) {
             <div className="ap-brand-title">NDUGU ACADEMY</div>
             <div className="ap-brand-sub">School Administration Portal</div>
           </div>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '5px 12px',
-            borderRadius: '9999px',
-            backgroundColor: '#0b1220',
-            border: 'none',
-            fontSize: '12px',
-            fontWeight: 700,
-            color: '#d8b257'
-          }}>
+          <div 
+            onClick={() => handleTabChange('academic-years')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 14px',
+              borderRadius: '9999px',
+              backgroundColor: '#0b1220',
+              border: 'none',
+              fontSize: '12px',
+              fontWeight: 700,
+              color: '#d8b257',
+              cursor: 'pointer'
+            }}
+            title="Click to manage Academic Years & Terms"
+          >
             <Calendar size={13} color="#d8b257" />
-            <span>2026 Academic Year</span>
+            <span>
+              {academicYearsList.find(y => y.isActive)?.label || '2026 Academic Year'}
+              {' '}&bull;{' '}
+              <strong style={{ color: '#34d399' }}>
+                {academicYearsList.find(y => y.isActive)?.terms?.find(t => t.isCurrent)?.name || 'Term I'}
+              </strong>
+            </span>
           </div>
         </div>
 
@@ -322,6 +356,7 @@ export default function AdminPortal({ onSwitchToLegacy }) {
             <LayoutDashboard size={16} />
             <span>Overview</span>
           </button>
+
           <button
             className={`ap-tab-btn ${activeTab === 'admissions' ? 'active' : ''}`}
             onClick={() => handleTabChange('admissions')}
@@ -344,14 +379,25 @@ export default function AdminPortal({ onSwitchToLegacy }) {
               applicationsList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({applicationsList.length})</span>
             )}
           </button>
+
           <button
-            className={`ap-tab-btn ${activeTab === 'users' ? 'active' : ''}`}
-            onClick={() => handleTabChange('users')}
+            className={`ap-tab-btn ${activeTab === 'academic-years' ? 'active' : ''}`}
+            onClick={() => handleTabChange('academic-years')}
           >
-            <Users size={16} />
-            <span>Staff &amp; Users</span>
-            {usersList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({usersList.length})</span>}
+            <Calendar size={16} />
+            <span>Years &amp; Terms</span>
+            {academicYearsList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({academicYearsList.length})</span>}
           </button>
+
+          <button
+            className={`ap-tab-btn ${activeTab === 'subjects' ? 'active' : ''}`}
+            onClick={() => handleTabChange('subjects')}
+          >
+            <BookOpen size={16} />
+            <span>Subjects</span>
+            {subjectsList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({subjectsList.length})</span>}
+          </button>
+
           <button
             className={`ap-tab-btn ${activeTab === 'classes' ? 'active' : ''}`}
             onClick={() => handleTabChange('classes')}
@@ -360,13 +406,32 @@ export default function AdminPortal({ onSwitchToLegacy }) {
             <span>Classes &amp; Streams</span>
             {classesList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({classesList.length})</span>}
           </button>
+
+          <button
+            className={`ap-tab-btn ${activeTab === 'teachers' ? 'active' : ''}`}
+            onClick={() => handleTabChange('teachers')}
+          >
+            <Users size={16} />
+            <span>Teachers</span>
+            {teachersList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({teachersList.length})</span>}
+          </button>
+
           <button
             className={`ap-tab-btn ${activeTab === 'students' ? 'active' : ''}`}
             onClick={() => handleTabChange('students')}
           >
             <GraduationCap size={16} />
-            <span>Student Registry</span>
+            <span>Students</span>
             {studentsList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({studentsList.length})</span>}
+          </button>
+
+          <button
+            className={`ap-tab-btn ${activeTab === 'users' ? 'active' : ''}`}
+            onClick={() => handleTabChange('users')}
+          >
+            <UserPlus size={16} />
+            <span>Personnel</span>
+            {usersList.length > 0 && <span style={{ fontSize: '10px', opacity: 0.8 }}>({usersList.length})</span>}
           </button>
         </nav>
 
@@ -425,21 +490,27 @@ export default function AdminPortal({ onSwitchToLegacy }) {
             <h2>
               {activeTab === 'overview' && 'School Administration Overview'}
               {activeTab === 'admissions' && 'Student Admissions & Clearance Board'}
-              {activeTab === 'users' && 'Staff & Academic Personnel'}
-              {activeTab === 'classes' && 'Academic Classes & Streams'}
+              {activeTab === 'academic-years' && 'Academic Years & School Terms'}
+              {activeTab === 'subjects' && 'Curriculum & Subjects Catalog'}
+              {activeTab === 'classes' && 'Academic Classes & Stream Allocations'}
+              {activeTab === 'teachers' && 'Teaching Faculty Directory'}
               {activeTab === 'students' && 'Student Enrollment Registry'}
+              {activeTab === 'users' && 'Staff & System Accounts'}
             </h2>
             <p>
               {activeTab === 'overview' && 'Central command center for Ndugu Academy operations.'}
               {activeTab === 'admissions' && 'Review applications, verify records, approve admissions, and issue official LCK- admission numbers.'}
-              {activeTab === 'users' && 'Manage authenticated accounts for instructors, heads of department, and bursars.'}
-              {activeTab === 'classes' && 'Configure active class streams, student cohorts, and teacher assignments.'}
+              {activeTab === 'academic-years' && 'Configure calendar sessions and toggle active Term I, Term II, or Term III.'}
+              {activeTab === 'subjects' && 'Manage O-Level (Compulsory/Optional) and A-Level (Principal/Subsidiary) subjects with UNEB codes.'}
+              {activeTab === 'classes' && 'Attach streams to academic classes, assign stream masters, and track capacities.'}
+              {activeTab === 'teachers' && 'Manage faculty profiles, contact records, qualifications, and teaching allocations.'}
               {activeTab === 'students' && 'Ugandan curriculum student registry with auto-generated registration numbers.'}
+              {activeTab === 'users' && 'Manage authenticated accounts for instructors, heads of department, and bursars.'}
             </p>
           </div>
 
           <div className="ap-controls-group">
-            {activeTab !== 'overview' && (
+            {['users', 'students'].includes(activeTab) && (
               <div className="ap-search-box">
                 <Search size={15} />
                 <input
@@ -467,12 +538,6 @@ export default function AdminPortal({ onSwitchToLegacy }) {
                 <span>Add Staff Account</span>
               </button>
             )}
-            {activeTab === 'classes' && (
-              <button onClick={() => setShowAddClassModal(true)} className="ap-btn-primary">
-                <Plus size={16} />
-                <span>Create Class</span>
-              </button>
-            )}
             {activeTab === 'students' && (
               <button onClick={() => setShowAddStudentModal(true)} className="ap-btn-primary">
                 <GraduationCap size={16} />
@@ -496,49 +561,71 @@ export default function AdminPortal({ onSwitchToLegacy }) {
         {activeTab === 'overview' && (
           <>
             {/* Stat Cards Grid */}
-            <div className="ap-stat-grid">
-              <div className="ap-stat-card" onClick={() => handleTabChange('users')} style={{ cursor: 'pointer' }}>
+            <div className="ap-stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+              
+              {/* Card 1: Academic Year & Term */}
+              <div className="ap-stat-card" onClick={() => handleTabChange('academic-years')} style={{ cursor: 'pointer' }}>
                 <div className="ap-stat-top">
-                  <span className="ap-stat-label">Total Staff / Faculty</span>
-                  <div className="ap-stat-icon">
-                    <Users size={18} color="#d8b257" />
+                  <span className="ap-stat-label">Active Academic Year</span>
+                  <div className="ap-stat-icon" style={{ backgroundColor: 'rgba(197, 155, 39, 0.15)' }}>
+                    <Calendar size={18} color="#d8b257" />
                   </div>
                 </div>
-                <div className="ap-stat-val">{usersList.length}</div>
+                <div className="ap-stat-val" style={{ color: '#d8b257' }}>
+                  {academicYearsList.find(y => y.isActive)?.year || 2026}
+                </div>
                 <div className="ap-stat-footer">
-                  <ArrowUpRight size={14} color="#d8b257" />
-                  <span>Teachers &amp; Administrative Personnel</span>
+                  <span style={{ color: '#34d399', fontWeight: 800 }}>● {academicYearsList.find(y => y.isActive)?.terms?.find(t => t.isCurrent)?.name || 'Term I'} Active</span>
+                  <span style={{ color: '#94a3b8' }}>&bull; Switch Term</span>
                 </div>
               </div>
 
+              {/* Card 2: Curriculum Subjects */}
+              <div className="ap-stat-card" onClick={() => handleTabChange('subjects')} style={{ cursor: 'pointer' }}>
+                <div className="ap-stat-top">
+                  <span className="ap-stat-label">Curriculum Subjects</span>
+                  <div className="ap-stat-icon" style={{ backgroundColor: 'rgba(96, 165, 250, 0.15)' }}>
+                    <BookOpen size={18} color="#60a5fa" />
+                  </div>
+                </div>
+                <div className="ap-stat-val" style={{ color: '#60a5fa' }}>{subjectsList.length}</div>
+                <div className="ap-stat-footer">
+                  <ArrowUpRight size={14} color="#60a5fa" />
+                  <span>O-Level &amp; A-Level Catalog</span>
+                </div>
+              </div>
+
+              {/* Card 3: Classes & Streams */}
               <div className="ap-stat-card" onClick={() => handleTabChange('classes')} style={{ cursor: 'pointer' }}>
                 <div className="ap-stat-top">
-                  <span className="ap-stat-label">Classes Configured</span>
+                  <span className="ap-stat-label">Classes &amp; Streams</span>
                   <div className="ap-stat-icon">
                     <Layers size={18} color="#d8b257" />
                   </div>
                 </div>
-                <div className="ap-stat-val">{classesList.length}</div>
+                <div className="ap-stat-val">{classesList.length} Classes</div>
                 <div className="ap-stat-footer">
                   <ArrowUpRight size={14} color="#d8b257" />
-                  <span>Senior 1 through Senior 6</span>
+                  <span>{classesList.reduce((acc, c) => acc + (c.streams?.length || 0), 0)} Attached Streams</span>
                 </div>
               </div>
 
-              <div className="ap-stat-card" onClick={() => handleTabChange('students')} style={{ cursor: 'pointer' }}>
+              {/* Card 4: Teachers */}
+              <div className="ap-stat-card" onClick={() => handleTabChange('teachers')} style={{ cursor: 'pointer' }}>
                 <div className="ap-stat-top">
-                  <span className="ap-stat-label">Enrolled Students</span>
-                  <div className="ap-stat-icon">
-                    <GraduationCap size={18} color="#d8b257" />
+                  <span className="ap-stat-label">Teaching Faculty</span>
+                  <div className="ap-stat-icon" style={{ backgroundColor: 'rgba(52, 211, 153, 0.15)' }}>
+                    <Users size={18} color="#34d399" />
                   </div>
                 </div>
-                <div className="ap-stat-val">{studentsList.length}</div>
+                <div className="ap-stat-val" style={{ color: '#34d399' }}>{teachersList.length}</div>
                 <div className="ap-stat-footer">
-                  <ArrowUpRight size={14} color="#d8b257" />
-                  <span>Active 2026 Academic Year Registry</span>
+                  <ArrowUpRight size={14} color="#34d399" />
+                  <span>Subject &amp; Stream Teachers</span>
                 </div>
               </div>
 
+              {/* Card 5: Admissions Intake */}
               <div className="ap-stat-card" onClick={() => handleTabChange('admissions')} style={{ cursor: 'pointer' }}>
                 <div className="ap-stat-top">
                   <span className="ap-stat-label">Admissions Intake</span>
@@ -553,6 +640,22 @@ export default function AdminPortal({ onSwitchToLegacy }) {
                 </div>
               </div>
 
+              {/* Card 6: Enrolled Students */}
+              <div className="ap-stat-card" onClick={() => handleTabChange('students')} style={{ cursor: 'pointer' }}>
+                <div className="ap-stat-top">
+                  <span className="ap-stat-label">Enrolled Students</span>
+                  <div className="ap-stat-icon">
+                    <GraduationCap size={18} color="#d8b257" />
+                  </div>
+                </div>
+                <div className="ap-stat-val">{studentsList.length}</div>
+                <div className="ap-stat-footer">
+                  <ArrowUpRight size={14} color="#d8b257" />
+                  <span>Active Registration Records</span>
+                </div>
+              </div>
+
+              {/* Card 7: System Health */}
               <div className="ap-stat-card">
                 <div className="ap-stat-top">
                   <span className="ap-stat-label">System Health</span>
@@ -699,7 +802,48 @@ export default function AdminPortal({ onSwitchToLegacy }) {
           />
         )}
 
-        {/* TAB 2: USERS & STAFF — NO CARD BORDER */}
+        {/* TAB: ACADEMIC YEARS & TERMS */}
+        {activeTab === 'academic-years' && (
+          <AcademicYearsTab
+            academicYears={academicYearsList}
+            onRefresh={() => fetchLiveData(true)}
+            showAlert={showAlert}
+          />
+        )}
+
+        {/* TAB: CURRICULUM SUBJECTS */}
+        {activeTab === 'subjects' && (
+          <SubjectsTab
+            subjects={subjectsList}
+            teachers={teachersList}
+            onRefresh={() => fetchLiveData(true)}
+            showAlert={showAlert}
+          />
+        )}
+
+        {/* TAB: CLASSES & STREAMS MANAGEMENT */}
+        {activeTab === 'classes' && (
+          <ClassesStreamsTab
+            classes={classesList}
+            teachers={teachersList}
+            academicYears={academicYearsList}
+            onRefresh={() => fetchLiveData(true)}
+            showAlert={showAlert}
+          />
+        )}
+
+        {/* TAB: TEACHING FACULTY */}
+        {activeTab === 'teachers' && (
+          <TeachersTab
+            teachers={teachersList}
+            subjects={subjectsList}
+            classes={classesList}
+            onRefresh={() => fetchLiveData(true)}
+            showAlert={showAlert}
+          />
+        )}
+
+        {/* TAB: USERS & STAFF — NO CARD BORDER */}
         {activeTab === 'users' && (
           <div className="ap-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -750,69 +894,6 @@ export default function AdminPortal({ onSwitchToLegacy }) {
                     ))}
                   </tbody>
                 </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 3: CLASSES — NO CARD BORDERS */}
-        {activeTab === 'classes' && (
-          <div className="ap-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#fff' }}>Academic Classes &amp; Streams ({filteredClasses.length})</h3>
-                <p style={{ fontSize: '12px', color: '#94a3b8' }}>Active classes across Lower and Upper Secondary</p>
-              </div>
-              <button onClick={() => setShowAddClassModal(true)} className="ap-btn-primary">
-                <Plus size={16} />
-                <span>Create Class</span>
-              </button>
-            </div>
-
-            {filteredClasses.length === 0 ? (
-              <div className="ap-empty-state">
-                <Layers size={40} color="#d8b257" />
-                <p>No academic classes configured yet.</p>
-                <button onClick={() => setShowAddClassModal(true)} className="ap-btn-primary">
-                  Add S1 Class
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-                {filteredClasses.map((c) => (
-                  <div
-                    key={c._id || c.name}
-                    style={{
-                      backgroundColor: '#0b1220',
-                      border: 'none',
-                      borderRadius: '16px',
-                      padding: '20px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px',
-                      boxShadow: '0 4px 14px rgba(0, 0, 0, 0.3)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span className="ap-badge">{c.level || 'Class'}</span>
-                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>Year {c.academicYear || 2026}</span>
-                    </div>
-                    <div style={{ fontSize: '18px', fontWeight: 800, color: '#fff' }}>{c.name}</div>
-                    <div style={{ fontSize: '12px', color: '#cbd5e1' }}>Stream: <strong>{c.stream || 'Standard'}</strong></div>
-                    <div style={{
-                      marginTop: 'auto',
-                      paddingTop: '12px',
-                      borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-                      fontSize: '11px',
-                      color: '#94a3b8',
-                      display: 'flex',
-                      justifyContent: 'space-between'
-                    }}>
-                      <span>Teacher: {c.classTeacher?.name || 'Unassigned'}</span>
-                      <span style={{ color: '#34d399', fontWeight: 700 }}>Active</span>
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
           </div>
