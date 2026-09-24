@@ -231,4 +231,94 @@ router.get('/stats', protect, authorize('super-admin', 'admin', 'teacher'), asyn
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BOARDING APPROVALS (LICOKA BENCHMARK)
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.get('/boarding-approvals', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
+  try {
+    const Student = require('../../../models/Student');
+    const { status, classLevel, search } = req.query;
+    const query = {};
+    if (classLevel) query.currentClassLevel = classLevel;
+    if (status === 'approved') query.boardingApproval = true;
+    if (status === 'pending') query.boardingApproval = false;
+
+    let students = await Student.find(query)
+      .populate('user', 'name email')
+      .populate('currentClass', 'name level stream')
+      .populate('boardingApprovalDetails.approvedBy', 'name role')
+      .sort({ updatedAt: -1 })
+      .limit(100);
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      students = students.filter(s => 
+        s.user?.name?.toLowerCase().includes(q) ||
+        s.studentId?.toLowerCase().includes(q) ||
+        s.admissionNumber?.toLowerCase().includes(q)
+      );
+    }
+
+    // Attach active room assignment if any
+    const studentIds = students.map(s => s._id);
+    const assignments = await BoarderAssignment.find({
+      student: { $in: studentIds },
+      status: 'active'
+    }).populate('dormitory', 'name gender').populate('room', 'roomNumber');
+
+    const assignmentMap = new Map();
+    assignments.forEach(a => assignmentMap.set(String(a.student), a));
+
+    const enriched = students.map(s => {
+      const a = assignmentMap.get(String(s._id));
+      return {
+        _id: s._id,
+        name: s.user?.name || 'Unnamed Student',
+        studentId: s.studentId,
+        admissionNumber: s.admissionNumber,
+        gender: s.gender,
+        classLevel: s.currentClassLevel || s.currentClass?.level || 'S1',
+        className: s.currentClass?.name || 'Unassigned',
+        boardingApproval: Boolean(s.boardingApproval),
+        approvedAt: s.boardingApprovalDetails?.approvedAt,
+        approvedBy: s.boardingApprovalDetails?.approvedBy?.name,
+        notes: s.boardingApprovalDetails?.notes,
+        dormitory: a?.dormitory?.name || 'Unassigned',
+        room: a?.room?.roomNumber || '—',
+        bedNumber: a?.bedNumber || '—'
+      };
+    });
+
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
+router.post('/boarding-approvals/:studentId', protect, authorize('super-admin', 'admin'), async (req, res) => {
+  try {
+    const Student = require('../../../models/Student');
+    const { approved = true, notes } = req.body;
+    const student = await Student.findById(req.params.studentId);
+    if (!student) return res.status(404).json({ error: { message: 'Student not found' } });
+
+    student.boardingApproval = Boolean(approved);
+    student.boardingApprovalDetails = {
+      approved: Boolean(approved),
+      approvedAt: new Date(),
+      approvedBy: req.user._id,
+      notes: notes || (approved ? 'Boarding clearance approved by warden/admin' : 'Boarding clearance revoked')
+    };
+
+    await student.save();
+    res.json({
+      message: `Boarding clearance ${approved ? 'approved' : 'revoked'} successfully for ${student.studentId}`,
+      student
+    });
+  } catch (err) {
+    res.status(400).json({ error: { message: err.message } });
+  }
+});
+
 module.exports = router;

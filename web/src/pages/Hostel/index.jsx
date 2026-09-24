@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import HostelDashboard from './HostelDashboard';
 import RoomAssignment from './RoomAssignment';
 import ExeatManager from './ExeatManager';
-import { Home, Bed, ShieldCheck } from 'lucide-react';
+import BoardingApprovalTab from './BoardingApprovalTab';
+import { Home, Bed, ShieldCheck, UserCheck } from 'lucide-react';
 
 const tabs = [
   { id: 'overview', label: 'Dormitories & Welfare', icon: Home },
+  { id: 'approvals', label: 'Boarding Approvals (Warden)', icon: UserCheck },
   { id: 'rooms', label: 'Room & Bed Allocations', icon: Bed },
   { id: 'exeats', label: 'Digital Gate Passes (Exeat)', icon: ShieldCheck },
 ];
@@ -35,6 +37,7 @@ export default function Hostel() {
 
       <div className="animate-fade-in">
         {activeTab === 'overview' && <HostelDashboard setActiveTab={setActiveTab} />}
+        {activeTab === 'approvals' && <BoardingApprovalTab />}
         {activeTab === 'rooms' && <RoomAssignment />}
         {activeTab === 'exeats' && <ExeatManager />}
       </div>

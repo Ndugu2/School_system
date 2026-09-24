@@ -42,6 +42,22 @@ const studentSchema = new mongoose.Schema({
     default: 'admitted'
   },
 
+  // ── Licoka Operational Clearances ──────────────────────────────────────────
+  financialClearance: {
+    type: Boolean,
+    default: false
+  },
+  boardingApproval: {
+    type: Boolean,
+    default: false
+  },
+  boardingApprovalDetails: {
+    approved: { type: Boolean, default: false },
+    approvedAt: { type: Date },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    notes: { type: String, trim: true }
+  },
+
   // ── Current Class (denormalized snapshot for quick lookups) ──────────────────
   // NOTE: The authoritative class assignment lives in Registration.
   // This field is updated automatically on registration/promotion.

@@ -30,7 +30,10 @@ import {
   Menu,
   FileCheck2,
   ShieldCheck,
-  Award
+  Award,
+  Landmark,
+  Home,
+  Bed
 } from 'lucide-react';
 import AdmissionsTab from './AdmissionsTab';
 import AcademicYearsTab from './AcademicYearsTab';
@@ -38,6 +41,8 @@ import SubjectsTab from './SubjectsTab';
 import ClassesStreamsTab from './ClassesStreamsTab';
 import TeachersTab from './TeachersTab';
 import ClassPermitsTab from './ClassPermitsTab';
+import Finance from '../Finance';
+import Hostel from '../Hostel';
 import './AdminPortal.css';
 
 export default function AdminPortal({ onSwitchToLegacy }) {
@@ -49,6 +54,8 @@ export default function AdminPortal({ onSwitchToLegacy }) {
   const getTabFromPath = (path) => {
     if (path.includes('/admin/admissions')) return 'admissions';
     if (path.includes('/admin/permits')) return 'permits';
+    if (path.includes('/admin/finance')) return 'finance';
+    if (path.includes('/admin/hostel') || path.includes('/admin/boarding')) return 'hostel';
     if (path.includes('/admin/academic-years')) return 'academic-years';
     if (path.includes('/admin/subjects')) return 'subjects';
     if (path.includes('/admin/classes')) return 'classes';
@@ -394,7 +401,41 @@ export default function AdminPortal({ onSwitchToLegacy }) {
               </button>
             </div>
 
-            {/* GROUP 2: ADMISSIONS & CLEARANCE */}
+            {/* GROUP 2: BURSAR & FINANCIALS (LICOKA BENCHMARK) */}
+            <div className="ap-nav-group">
+              {!sidebarCollapsed && <div className="ap-nav-group-title">Bursar &amp; Financials</div>}
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'finance' ? 'active' : ''}`}
+                onClick={() => handleTabChange('finance')}
+                title="Institutional Finances, Fees & 40% Gatekeeper"
+              >
+                <div className="ap-link-lead">
+                  <Landmark size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Fees &amp; Financials</span>}
+                </div>
+                {!sidebarCollapsed && <span className="ap-badge-gold">Bursary</span>}
+              </button>
+            </div>
+
+            {/* GROUP 3: RESIDENTIAL & HOSTEL (LICOKA BENCHMARK) */}
+            <div className="ap-nav-group">
+              {!sidebarCollapsed && <div className="ap-nav-group-title">Dormitories &amp; Boarding</div>}
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'hostel' ? 'active' : ''}`}
+                onClick={() => handleTabChange('hostel')}
+                title="Hostel Accommodation, Bed Allocations & Exeat Passes"
+              >
+                <div className="ap-link-lead">
+                  <Home size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Dormitories &amp; Welfare</span>}
+                </div>
+                {!sidebarCollapsed && <span className="ap-badge-accent">Hostels</span>}
+              </button>
+            </div>
+
+            {/* GROUP 4: ADMISSIONS & CLEARANCE */}
             <div className="ap-nav-group">
               {!sidebarCollapsed && <div className="ap-nav-group-title">Admissions &amp; Clearance</div>}
               
@@ -448,7 +489,7 @@ export default function AdminPortal({ onSwitchToLegacy }) {
               </button>
             </div>
 
-            {/* GROUP 3: ACADEMIC CALENDAR & CURRICULUM */}
+            {/* GROUP 5: ACADEMIC CALENDAR & CURRICULUM */}
             <div className="ap-nav-group">
               {!sidebarCollapsed && <div className="ap-nav-group-title">Academics &amp; Faculty</div>}
 
@@ -599,6 +640,8 @@ export default function AdminPortal({ onSwitchToLegacy }) {
                 <span className="ap-breadcrumb-sep">/</span>
                 <span className="ap-breadcrumb-active">
                   {activeTab === 'overview' && 'Overview Dashboard'}
+                  {activeTab === 'finance' && 'Institutional Finances & Bursar'}
+                  {activeTab === 'hostel' && 'Dormitories & Welfare'}
                   {activeTab === 'admissions' && 'Admissions & Clearance'}
                   {activeTab === 'permits' && 'Class Entry Permits'}
                   {activeTab === 'academic-years' && 'Academic Years & Terms'}
@@ -661,6 +704,8 @@ export default function AdminPortal({ onSwitchToLegacy }) {
               <div className="ap-page-header">
                 <h2>
                   {activeTab === 'overview' && 'School Administration Overview'}
+                  {activeTab === 'finance' && 'Institutional Finance & Bursar Operations'}
+                  {activeTab === 'hostel' && 'Hostel Accommodation & Dormitory Management'}
                   {activeTab === 'admissions' && 'Student Admissions & Clearance Board'}
                   {activeTab === 'permits' && 'Class Entry Permits & Stream Allocations'}
                   {activeTab === 'academic-years' && 'Academic Years & School Terms'}
@@ -672,6 +717,8 @@ export default function AdminPortal({ onSwitchToLegacy }) {
                 </h2>
                 <p>
                   {activeTab === 'overview' && 'Central command center for Ndugu Academy operations.'}
+                  {activeTab === 'finance' && 'Manage tuition fee structures, student ledger balances, official RcT receipts, and 40% threshold exam/dining gatekeeper passes.'}
+                  {activeTab === 'hostel' && 'Oversee residential boarding dormitories, room and bed capacity allocations, student boarding approvals, and digital exeat passes.'}
                   {activeTab === 'admissions' && 'Review applications, verify records, approve admissions, and issue official LCK- admission numbers.'}
                   {activeTab === 'permits' && 'Generate official Licoka-style class permits (PER-xxxx), verify 40% fee clearance status, assign streams (Green/White/Blue), and print student permit passes.'}
                   {activeTab === 'academic-years' && 'Configure calendar sessions and toggle active Term I, Term II, or Term III.'}
@@ -979,6 +1026,16 @@ export default function AdminPortal({ onSwitchToLegacy }) {
         {/* TAB: CLASS ENTRY PERMITS (LICOKA CLEARANCE) */}
         {activeTab === 'permits' && (
           <ClassPermitsTab />
+        )}
+
+        {/* TAB: INSTITUTIONAL FINANCE & BURSAR OPERATIONS */}
+        {activeTab === 'finance' && (
+          <Finance />
+        )}
+
+        {/* TAB: HOSTEL ACCOMMODATION & DORMITORIES */}
+        {activeTab === 'hostel' && (
+          <Hostel />
         )}
 
         {/* TAB: ACADEMIC YEARS & TERMS */}
