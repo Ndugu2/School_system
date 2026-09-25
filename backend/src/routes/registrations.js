@@ -141,7 +141,7 @@ router.post('/', protect, authorize(...ADMIN_ROLES), async (req, res) => {
       boardingStatus: boardingStatus || 'day',
       subjectCombination,
       subjects: subjects || [],
-      status: 'registered',
+      status: 'enrolled',
       registrationNumber,
       notes,
       registeredBy: req.user._id,
@@ -307,6 +307,15 @@ router.patch('/:id/clearance-step', protect, authorize(...ADMIN_ROLES, 'bursar',
         // Only admin or registrar can do final approval
         if (!ADMIN_ROLES.includes(req.user.role)) {
           return res.status(403).json({ error: { message: 'Only administrators or registrars can approve registration' } });
+        }
+        if (reg.feeClearanceStatus !== 'cleared') {
+          return res.status(400).json({ error: { message: 'Fee assessment must be cleared before approval' } });
+        }
+        if (reg.materialsCheckStatus !== 'verified') {
+          return res.status(400).json({ error: { message: 'Required materials must be verified before approval' } });
+        }
+        if (!reg.parentConfirmed) {
+          return res.status(400).json({ error: { message: 'Guardian confirmation is required before approval' } });
         }
         reg.status = 'registered';
         reg.registrationStage = 'approved';

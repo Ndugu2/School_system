@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const termSchema = new mongoose.Schema({
   name: {
     type: String,
-    enum: ['Term I', 'Term II', 'Term III', 'Term 1', 'Term 2', 'Term 3'],
+    enum: ['Term 1', 'Term 2', 'Term 3'],
     required: true
   },
   startDate: { type: Date },
