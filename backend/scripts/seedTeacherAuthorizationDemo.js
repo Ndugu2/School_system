@@ -19,6 +19,11 @@ const findOrCreateUser = async (email, name, role) => {
 
 async function seed() {
   if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required in backend/.env');
+  const databaseHost = new URL(process.env.MONGODB_URI).hostname;
+  const isLocalDatabase = ['localhost', '127.0.0.1', '::1'].includes(databaseHost);
+  if (process.env.NODE_ENV === 'production' || (!isLocalDatabase && process.env.ALLOW_DEMO_SEED !== 'true')) {
+    throw new Error('Demo data seeding is limited to local databases. Set ALLOW_DEMO_SEED=true for a non-production remote development database.');
+  }
   await mongoose.connect(process.env.MONGODB_URI);
 
   const yearNumber = new Date().getFullYear();
