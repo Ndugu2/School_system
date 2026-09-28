@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -27,18 +27,22 @@ import Library from './pages/Library';
 import Hostel from './pages/Hostel';
 import LeadershipPortal from './pages/LeadershipPortal';
 import Analytics from './pages/Analytics';
-import { canAccessTab } from './config/permissions';
+import UnauthorizedPage from './pages/UnauthorizedPage';
+import AccountInactivePage from './pages/AccountInactivePage';
+import { canAccessTab, roleHome } from './config/permissions';
 
 function DashboardContent() {
-  const { user, loading } = useAuth();
-  const defaultTab = 'dashboard';
-  const [currentTab, setCurrentTab] = useState(defaultTab);
+  const { user, loading, inactive } = useAuth();
+  const [currentTab, setCurrentTab] = useState('dashboard');
+  const [seenUser, setSeenUser] = useState(null);
 
-  useEffect(() => {
-    if (user && user.role === 'parent') {
-      setCurrentTab('parent_portal');
-    }
-  }, [user]);
+  // Adjust the active tab while rendering when the signed-in user changes, so
+  // every role is routed to its dedicated landing and no stale tab leaks
+  // across sessions.
+  if (seenUser !== user) {
+    setSeenUser(user);
+    setCurrentTab(user ? (user.landing || roleHome(user.role)) : 'dashboard');
+  }
 
   if (loading) {
     return (
@@ -49,12 +53,20 @@ function DashboardContent() {
     );
   }
 
+  if (inactive) {
+    return <AccountInactivePage />;
+  }
+
   if (!user) {
     return <Login />;
   }
 
+  if (user.isActive === false) {
+    return <AccountInactivePage />;
+  }
+
   if (!canAccessTab(user.role, currentTab)) {
-    return <Layout currentTab={currentTab} setCurrentTab={setCurrentTab}><div style={styles.denied}>You do not have permission to access this area.</div></Layout>;
+    return <Layout currentTab={currentTab} setCurrentTab={setCurrentTab}><UnauthorizedPage role={user.role} /></Layout>;
   }
 
   // Render correct page view inside layout based on selected tab
@@ -153,7 +165,6 @@ const styles = {
     fontWeight: '500',
     letterSpacing: '0.5px',
   },
-  denied: { padding: '32px', borderRadius: '12px', background: 'var(--danger-light)', color: 'var(--danger)', fontWeight: 600 }
 };
 
 // Add standard keyframe spin to header or stylesheet

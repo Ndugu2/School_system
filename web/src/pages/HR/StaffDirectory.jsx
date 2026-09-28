@@ -30,6 +30,7 @@ export default function StaffDirectory() {
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     api.get('/hr/staff').then(setStaff).catch(() => setStaff([])).finally(() => setLoading(false));
@@ -42,33 +43,44 @@ export default function StaffDirectory() {
     return matchSearch && matchRole;
   });
 
-  const openAdd = () => { setForm(emptyForm); setEditId(null); setShowModal(true); };
+  const openAdd = () => { setForm({ ...emptyForm, status: 'active' }); setEditId(null); setError(''); setShowModal(true); };
   const openEdit = (st) => {
     setForm({ ...st, subjects: Array.isArray(st.subjects) ? st.subjects.join(', ') : '' });
     setEditId(st._id);
+    setError('');
     setShowModal(true);
   };
 
   const handleSave = async () => {
     if (!form.name || !form.email) return;
     setSaving(true);
+    setError('');
     const payload = { ...form, subjects: form.subjects ? form.subjects.split(',').map(s => s.trim()).filter(Boolean) : [] };
     try {
       if (editId) {
         if (form.source === 'user') {
-          await api.put(`/auth/${editId}`, { name: form.name, email: form.email, role: ROLE_VALUES[form.role] || 'teacher', isActive: form.status === 'active' });
+          await api.put(`/auth/${editId}`, {
+            name: form.name,
+            email: form.email,
+            role: ROLE_VALUES[form.role] || 'teacher',
+            isActive: form.status !== 'inactive',
+            password: form.password || undefined,
+          });
         } else {
           await api.put(`/hr/staff/${editId}`, payload);
         }
         setStaff(prev => prev.map(s => s._id === editId ? { ...s, ...payload } : s));
       } else {
-        const created = await api.post('/auth', { name: form.name, email: form.email, role: ROLE_VALUES[form.role] || 'teacher', isActive: form.status === 'active' });
+        const created = await api.post('/auth', { name: form.name, email: form.email, role: ROLE_VALUES[form.role] || 'teacher', isActive: form.status !== 'inactive', password: form.password });
         const staffMember = { ...payload, _id: created.id, source: 'user' };
         setStaff(prev => [...prev, staffMember]);
       }
-    } catch {}
-    setShowModal(false);
-    setSaving(false);
+      setShowModal(false);
+    } catch (err) {
+      setError(err.message || 'Could not save the staff member. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -158,6 +170,7 @@ export default function StaffDirectory() {
               <button style={s.closeBtn} onClick={() => setShowModal(false)}><X size={18} /></button>
             </div>
             <div style={s.modalBody}>
+              {error && <div style={s.errorAlert}>{error}</div>}
               <div style={s.formGrid}>
                 <div style={s.formGroup}>
                   <label style={s.label}>Full Name *</label>
@@ -204,6 +217,10 @@ export default function StaffDirectory() {
                     <option value="on_leave">On Leave</option>
                     <option value="inactive">Inactive</option>
                   </select>
+                </div>
+                <div style={s.formGroup}>
+                  <label style={s.label}>{form.source === 'user' ? 'Reset Password (optional)' : 'Initial Password'}</label>
+                  <input style={s.input} type="password" value={form.password || ''} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Leave blank to keep current" />
                 </div>
               </div>
             </div>
@@ -253,6 +270,7 @@ const s = {
   modal: { backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', width: '100%', maxWidth: 640, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' },
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--border)' },
   modalTitle: { margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' },
+  errorAlert: { background: 'var(--danger-light)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 14, border: '1px solid rgba(239,68,68,0.25)' },
   closeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex' },
   modalBody: { padding: '20px 24px', overflowY: 'auto', flex: 1 },
   formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },

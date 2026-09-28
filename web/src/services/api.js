@@ -31,6 +31,9 @@ const fetchApi = async (endpoint, options = {}) => {
     const data = await response.json();
 
     if (!response.ok) {
+      const err = new Error(data.error?.message || 'Something went wrong');
+      err.status = response.status;
+      err.data = data;
       if (response.status === 401) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -38,7 +41,9 @@ const fetchApi = async (endpoint, options = {}) => {
           window.location.assign('/login');
         }
       }
-      throw new Error(data.error?.message || 'Something went wrong');
+      // 403 (and other statuses) intentionally do NOT redirect: the UI must
+      // decide between "forbidden" and "account deactivated" states.
+      throw err;
     }
 
     return data;

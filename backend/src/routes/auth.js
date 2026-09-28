@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
-const { ROLES, ADMIN_ROLES } = require('../config/roles');
+const { ROLES, ADMIN_ROLES, roleMatches, getLandingForRole } = require('../config/roles');
 const router = express.Router();
 
 const loginLimiter = rateLimit({
@@ -84,6 +84,7 @@ router.post('/register', async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        landing: getLandingForRole(user.role),
         token: generateToken(user._id)
       });
     } else {
@@ -126,6 +127,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       email: user.email,
       role: user.role,
       avatar: user.avatar,
+      landing: getLandingForRole(user.role),
       token: generateToken(user._id),
       refreshToken: generateRefreshToken(user._id)
     });
@@ -139,7 +141,10 @@ router.post('/login', loginLimiter, async (req, res) => {
 // @desc    Get current user profile
 // @access  Private
 router.get('/me', protect, async (req, res) => {
-  res.status(200).json(req.user);
+  res.status(200).json({
+    ...(req.user && req.user.toObject ? req.user.toObject() : req.user),
+    landing: getLandingForRole(req.user.role)
+  });
 });
 
 // @route   GET /api/auth/users
@@ -147,7 +152,7 @@ router.get('/me', protect, async (req, res) => {
 // @access  Private (admin+)
 router.get('/users', protect, async (req, res) => {
   try {
-    if (!['super-admin', 'admin'].includes(req.user.role)) {
+    if (!roleMatches(req.user.role, ADMIN_ROLES)) {
       return res.status(403).json({ error: { message: 'Not authorized' } });
     }
     const users = await User.find({}, '_id name email role isActive').sort({ name: 1 });
@@ -239,6 +244,7 @@ router.post('/demo-login', async (req, res) => {
       email: user.email,
       role: user.role,
       avatar: user.avatar,
+      landing: getLandingForRole(user.role),
       token: generateToken(user._id),
       refreshToken: generateRefreshToken(user._id)
     });
@@ -280,7 +286,8 @@ router.get('/refresh', async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        landing: getLandingForRole(user.role)
       }
     });
   } catch (err) {
