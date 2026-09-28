@@ -5,7 +5,7 @@ const Student = require('../models/Student');
 const Subject = require('../models/Subject');
 const { protect, authorize } = require('../middleware/auth');
 const { logAudit } = require('../middleware/auditLog');
-const { teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent } = require('../middleware/recordAccess');
+const { teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent, hasAssignedClass } = require('../middleware/recordAccess');
 
 const ENTRY_ROLES = ['super-admin', 'admin', 'academic-admin', 'teacher', 'class-teacher'];
 const APPROVAL_ROLES = ['super-admin', 'admin', 'academic-admin', 'hod'];
@@ -477,10 +477,23 @@ router.get('/analytics/class-performance', protect, authorize(...APPROVAL_ROLES,
     const { class: classId, term, academicYear, examType = 'EOT' } = req.query;
     if (!classId || !term || !academicYear) return res.status(400).json({ error: { message: 'class, term, and academicYear are required' } });
 
-    const results = await ExamResult.find({
+    const query = {
       class: classId, term, academicYear: parseInt(academicYear),
       examType, approvalStatus: { $in: ['hod-approved', 'admin-approved', 'published'] }
-    })
+    };
+    if (['teacher', 'class-teacher'].includes(req.user.role)) {
+      const { classIds, subjectIds } = await teacherAssignments(req.user._id);
+      if (!hasAssignedClass(classIds, classId)) {
+        return res.status(403).json({ error: { message: 'Not authorized to view results for this class' } });
+      }
+      query.subject = { $in: subjectIds };
+    } else if (req.user.role === 'hod') {
+      const scope = await academicScope(req.user);
+      if (!scope.subjectIds.length) return res.status(403).json({ error: { message: 'No academic subjects are assigned to this HOD' } });
+      query.subject = { $in: scope.subjectIds };
+    }
+
+    const results = await ExamResult.find(query)
       .populate('subject', 'name code')
       .populate('student', 'studentId')
       .populate({ path: 'student', populate: { path: 'user', select: 'name' } });
@@ -516,11 +529,18 @@ router.get('/analytics/class-performance', protect, authorize(...APPROVAL_ROLES,
 // ═══════════════════════════════════════════════════════════════════════════════
 // LICOKA FINANCIAL EXAM GATE (Eligibility based on StudentPass / 40% threshold)
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get('/eligibility/:classId/:term', protect, async (req, res) => {
+router.get('/eligibility/:classId/:term', protect, authorize('super-admin', 'admin', 'bursar', 'supervisor', 'deputy-head', 'academic-admin', 'director-of-studies', 'class-teacher', 'teacher'), async (req, res) => {
   try {
     const { classId, term } = req.params;
     const academicYear = req.query.academicYear ? parseInt(req.query.academicYear) : new Date().getFullYear();
     const StudentPass = require('../models/StudentPass');
+
+    if (['teacher', 'class-teacher'].includes(req.user.role)) {
+      const { classIds } = await teacherAssignments(req.user._id);
+      if (!hasAssignedClass(classIds, classId)) {
+        return res.status(403).json({ error: { message: 'Not authorized to view exam eligibility for this class' } });
+      }
+    }
 
     const students = await Student.find({ currentClass: classId })
       .populate('user', 'name email')

@@ -67,7 +67,9 @@ const canAccessStudent = async (user, studentId) => {
 const canTeachSubjectInClass = async (user, classId, subjectId) => {
   if (!['teacher', 'class-teacher'].includes(user.role)) return true;
   const { classIds, subjectIds } = await teacherAssignments(user._id);
-  return classIds.includes(String(classId)) && subjectIds.includes(String(subjectId));
+  return hasAssignedClass(classIds, classId) && subjectIds.includes(String(subjectId));
 };
 
-module.exports = { isSchoolManager, teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent, canTeachSubjectInClass };
+const hasAssignedClass = (classIds, classId) => classIds.includes(String(classId));
+
+module.exports = { isSchoolManager, teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent, canTeachSubjectInClass, hasAssignedClass };
