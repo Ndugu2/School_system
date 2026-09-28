@@ -56,7 +56,11 @@ const canAccessStudent = async (user, studentId) => {
   const student = await Student.findById(studentId).select('user parentUser parentEmail currentClass');
   if (!student) return false;
   if (user.role === 'student') return String(student.user) === String(user._id);
-  if (user.role === 'parent') return String(student.parentUser) === String(user._id) || student.parentEmail === user.email;
+  if (user.role === 'parent') {
+    const linkedAccount = student.parentUser && String(student.parentUser) === String(user._id);
+    const linkedEmail = student.parentEmail && user.email && student.parentEmail.toLowerCase() === user.email.toLowerCase();
+    return Boolean(linkedAccount || linkedEmail);
+  }
   if (['teacher', 'class-teacher'].includes(user.role)) {
     const { classIds } = await teacherAssignments(user._id);
     return classIds.includes(String(student.currentClass));

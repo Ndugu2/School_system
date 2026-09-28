@@ -1,7 +1,7 @@
 const express = require('express');
 const Material = require('../models/Material');
 const { protect, authorize } = require('../middleware/auth');
-const { teacherAssignments, canTeachSubjectInClass } = require('../middleware/recordAccess');
+const { teacherAssignments, canTeachSubjectInClass, hasAssignedClass } = require('../middleware/recordAccess');
 const { logAudit } = require('../middleware/auditLog');
 
 const router = express.Router();
@@ -17,7 +17,7 @@ router.get('/', protect, authorize(...ALL_MATERIAL_ROLES, 'teacher', 'class-teac
 
     if (isTeacher(req.user)) {
       const { classIds, subjectIds } = await teacherAssignments(req.user._id);
-      if ((classId && !classIds.includes(String(classId))) || (subjectId && !subjectIds.includes(String(subjectId)))) {
+      if ((classId && !hasAssignedClass(classIds, classId)) || (subjectId && !subjectIds.includes(String(subjectId)))) {
         return res.status(403).json({ error: { message: 'Not authorized to view materials for this class or subject' } });
       }
       query.class = classId || { $in: classIds };
