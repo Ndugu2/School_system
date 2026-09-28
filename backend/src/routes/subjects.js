@@ -2,6 +2,7 @@ const express = require('express');
 const Subject = require('../models/Subject');
 const Class = require('../models/Class');
 const { protect, authorize } = require('../middleware/auth');
+const { teacherAssignments, academicScope } = require('../middleware/recordAccess');
 const router = express.Router();
 
 // @route   POST /api/subjects
@@ -73,6 +74,14 @@ router.get('/', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy
   else if (type && type !== 'all') filter.type = type;
 
   try {
+    if (['teacher', 'class-teacher'].includes(req.user.role)) {
+      const { subjectIds } = await teacherAssignments(req.user._id);
+      filter._id = { $in: subjectIds };
+    }
+    if (req.user.role === 'hod') {
+      const scope = await academicScope(req.user);
+      filter._id = { $in: scope.subjectIds };
+    }
     const subjects = await Subject.find(filter)
       .populate('class')
       .populate('teacher', 'name email')

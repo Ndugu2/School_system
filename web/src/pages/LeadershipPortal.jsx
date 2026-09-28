@@ -179,7 +179,102 @@ export default function LeadershipPortal({ type, setCurrentTab }) {
           </article>
         </section>
       )}
+
+      {type === 'director-of-studies' && <AcademicPermissionsPanel />}
     </div>
+  );
+}
+
+function AcademicPermissionsPanel() {
+  const [teachers, setTeachers] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [permissions, setPermissions] = useState([]);
+  const [form, setForm] = useState({ teacher: '', subject: '', class: '', term: 'Term 1', endsAt: '' });
+  const [message, setMessage] = useState('');
+
+  const load = async () => {
+    const [teacherData, subjectData, classData, permissionData] = await Promise.all([
+      api.get('/teachers'),
+      api.get('/subjects'),
+      api.get('/classes'),
+      api.get('/academic-permissions'),
+    ]);
+    setTeachers(teacherData.filter(item => ['teacher', 'class-teacher'].includes(item.user?.role)));
+    setSubjects(subjectData);
+    setClasses(classData);
+    setPermissions(permissionData);
+  };
+
+  useEffect(() => {
+    load().catch(error => setMessage(error.message || 'Unable to load academic permissions'));
+  }, []);
+
+  const grant = async (event) => {
+    event.preventDefault();
+    setMessage('');
+    try {
+      await api.post('/academic-permissions', {
+        ...form,
+        academicYear: new Date().getFullYear(),
+        endsAt: new Date(form.endsAt).toISOString(),
+      });
+      setForm({ teacher: '', subject: '', class: '', term: 'Term 1', endsAt: '' });
+      setMessage('Marks-entry permission granted.');
+      await load();
+    } catch (error) {
+      setMessage(error.message || 'Unable to grant permission');
+    }
+  };
+
+  const revoke = async (id) => {
+    try {
+      await api.patch(`/academic-permissions/${id}/revoke`, {});
+      await load();
+    } catch (error) {
+      setMessage(error.message || 'Unable to revoke permission');
+    }
+  };
+
+  return (
+    <section style={s.panel}>
+      <p style={s.eyebrow}>DOS controls</p>
+      <h2 style={s.heading}>Marks-entry permissions</h2>
+      <p style={s.subtitle}>Grant teachers access only to a specific subject, class, term, and time window.</p>
+      {message && <p role="status" style={{ color: '#b45309', fontSize: 13 }}>{message}</p>}
+      <form onSubmit={grant} style={{ ...s.actions, marginTop: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+          <select required value={form.teacher} onChange={event => setForm({ ...form, teacher: event.target.value })} style={s.select}>
+            <option value="">Teacher</option>
+            {teachers.map(item => <option key={item._id} value={item.user._id}>{item.user.name}</option>)}
+          </select>
+          <select required value={form.subject} onChange={event => setForm({ ...form, subject: event.target.value })} style={s.select}>
+            <option value="">Subject</option>
+            {subjects.map(item => <option key={item._id} value={item._id}>{item.name} ({item.department || 'General'})</option>)}
+          </select>
+          <select required value={form.class} onChange={event => setForm({ ...form, class: event.target.value })} style={s.select}>
+            <option value="">Class</option>
+            {classes.map(item => <option key={item._id} value={item._id}>{item.name}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'end' }}>
+          <select value={form.term} onChange={event => setForm({ ...form, term: event.target.value })} style={s.select}>
+            <option>Term 1</option><option>Term 2</option><option>Term 3</option>
+          </select>
+          <input required type="datetime-local" value={form.endsAt} onChange={event => setForm({ ...form, endsAt: event.target.value })} style={s.select} />
+          <button type="submit" style={s.primary}>Grant access <ShieldCheck size={16} /></button>
+        </div>
+      </form>
+      <div style={{ ...s.actions, marginTop: 18 }}>
+        {permissions.length === 0 ? <p style={s.note}>No active or historical permissions yet.</p> : permissions.map(permission => (
+          <div key={permission._id} style={s.action}>
+            <ShieldCheck size={17} color={permission.revokedAt ? '#94a3b8' : '#0f9f79'} />
+            <span><strong>{permission.teacher?.name} · {permission.subject?.name}</strong><small>{permission.class?.name} · {permission.term} · ends {new Date(permission.endsAt).toLocaleString()}</small></span>
+            {!permission.revokedAt && <button type="button" onClick={() => revoke(permission._id)} style={s.linkButton}>Revoke</button>}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -210,6 +305,8 @@ const s = {
   heading: { margin: '5px 0 18px', color: 'var(--text-primary)', fontSize: 18 },
   actions: { display: 'flex', flexDirection: 'column', gap: 8 },
   action: { display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: 12, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg-primary)', color: 'var(--text-primary)', textAlign: 'left', cursor: 'pointer' },
+  select: { flex: 1, minWidth: 0, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 },
+  linkButton: { marginLeft: 'auto', border: 'none', background: 'transparent', color: 'var(--primary)', cursor: 'pointer', fontWeight: 700 },
   metrics: { display: 'flex', flexDirection: 'column', gap: 12 },
   primary: { marginTop: 20, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 14px', border: 'none', borderRadius: 10, background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontWeight: 700 },
   alerts: { display: 'flex', flexDirection: 'column', gap: 10 },
