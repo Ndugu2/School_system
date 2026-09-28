@@ -14,6 +14,10 @@ const teacherSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Subject'
   }],
+  departments: [{
+    type: String,
+    trim: true
+  }],
   classes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Class'

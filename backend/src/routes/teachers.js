@@ -7,8 +7,11 @@ const router = express.Router();
 // @route   POST /api/teachers
 // @desc    Add a teacher profile (Creates User account + Teacher profile)
 // @access  Private (Admin/Super-Admin/Headteacher/DOS)
-router.post('/', protect, authorize('admin', 'super-admin', 'headteacher', 'dos', 'academic-admin'), async (req, res) => {
-  const { name, email, password, qualification, phoneNumber, subjects, classes } = req.body;
+router.post('/', protect, authorize('admin', 'super-admin', 'headteacher', 'director-of-studies', 'academic-admin'), async (req, res) => {
+  const { name, email, password, qualification, phoneNumber, subjects, classes, departments, role = 'teacher' } = req.body;
+  if (!['teacher', 'class-teacher', 'hod'].includes(role)) {
+    return res.status(400).json({ error: { message: 'Teacher accounts may only use teacher, class-teacher, or hod roles' } });
+  }
 
   try {
     const userExists = await User.findOne({ email });
@@ -20,7 +23,7 @@ router.post('/', protect, authorize('admin', 'super-admin', 'headteacher', 'dos'
       name,
       email,
       password: password || 'teacher123',
-      role: 'teacher'
+      role
     });
 
     const teacher = await Teacher.create({
@@ -28,7 +31,8 @@ router.post('/', protect, authorize('admin', 'super-admin', 'headteacher', 'dos'
       qualification,
       phoneNumber,
       subjects: subjects || [],
-      classes: classes || []
+      classes: classes || [],
+      departments: departments || []
     });
 
     const populatedTeacher = await Teacher.findById(teacher._id)
@@ -45,7 +49,7 @@ router.post('/', protect, authorize('admin', 'super-admin', 'headteacher', 'dos'
 // @route   GET /api/teachers
 // @desc    Get all teachers
 // @access  Private
-router.get('/', protect, authorize('admin', 'super-admin', 'headteacher', 'dos', 'supervisor', 'deputy-head', 'academic-admin', 'teacher', 'registrar'), async (req, res) => {
+router.get('/', protect, authorize('admin', 'super-admin', 'headteacher', 'director-of-studies', 'supervisor', 'deputy-head', 'academic-admin', 'teacher', 'registrar'), async (req, res) => {
   try {
     const teachers = await Teacher.find({})
       .populate('user', '-password')
@@ -79,7 +83,7 @@ router.get('/:id', protect, authorize('admin', 'super-admin', 'supervisor', 'dep
 // @desc    Update teacher profile
 // @access  Private (Admin/Super-Admin)
 router.put('/:id', protect, authorize('admin', 'super-admin'), async (req, res) => {
-  const { name, email, qualification, phoneNumber, subjects, classes } = req.body;
+  const { name, email, qualification, phoneNumber, subjects, classes, departments } = req.body;
 
   try {
     const teacher = await Teacher.findById(req.params.id);
@@ -100,6 +104,7 @@ router.put('/:id', protect, authorize('admin', 'super-admin'), async (req, res) 
 
     if (Array.isArray(subjects)) teacher.subjects = subjects;
     if (Array.isArray(classes)) teacher.classes = classes;
+    if (Array.isArray(departments)) teacher.departments = departments;
 
     await teacher.save();
 

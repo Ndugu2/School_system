@@ -138,6 +138,8 @@ app.use('/api/fees',            require('./routes/fees'));
 
 // ── Phase 1: Foundation Routes ────────────────────────────────────────────────
 app.use('/api/academic-years',      require('./routes/academicYears'));
+app.use('/api/academic-permissions', require('./routes/academicPermissions'));
+app.use('/api/materials',            require('./routes/materials'));
 app.use('/api/registrations',       require('./routes/registrations'));
 app.use('/api/requirements',        require('./routes/requirements'));
 app.use('/api/permits',              require('./routes/permits'));

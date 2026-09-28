@@ -3,12 +3,13 @@ const Attendance = require('../models/Attendance');
 const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
 const { protect, authorize } = require('../middleware/auth');
+const { logAudit } = require('../middleware/auditLog');
 const router = express.Router();
 
 // @route   POST /api/attendance
 // @desc    Record or update attendance in bulk for a class
 // @access  Private (Admin/Super-Admin/Teacher)
-router.post('/', protect, authorize('admin', 'super-admin', 'teacher'), async (req, res) => {
+router.post('/', protect, authorize('admin', 'super-admin', 'teacher', 'class-teacher'), async (req, res) => {
   const { classId, date, term, records } = req.body; // records: [{ student: id, status: 'Present'|'Absent'|... }]
 
   if (!classId || !date || !term || !records || !Array.isArray(records)) {
@@ -22,6 +23,12 @@ router.post('/', protect, authorize('admin', 'super-admin', 'teacher'), async (r
         return res.status(403).json({ error: { message: 'You may only record attendance for your assigned classes' } });
       }
     }
+    const studentIds = records.map(record => record.student);
+    const students = await Student.find({ _id: { $in: studentIds } }).select('_id currentClass');
+    if (students.length !== new Set(studentIds.map(String)).size || students.some(student => String(student.currentClass) !== String(classId))) {
+      return res.status(403).json({ error: { message: 'Every attendance record must belong to a student in the selected class' } });
+    }
+
     const formattedDate = new Date(date);
     formattedDate.setHours(0,0,0,0);
 
@@ -42,7 +49,16 @@ router.post('/', protect, authorize('admin', 'super-admin', 'teacher'), async (r
       }
     }));
 
+    const previous = await Attendance.find({ student: { $in: studentIds }, date: formattedDate }).lean();
     await Attendance.bulkWrite(bulkOperations);
+    await logAudit(req, {
+      action: 'attendance.recorded',
+      module: 'attendance',
+      recordId: classId,
+      oldValue: previous,
+      newValue: records.map(record => ({ student: record.student, status: record.status, remarks: record.remarks || '' })),
+      description: `Recorded attendance for ${records.length} students in class ${classId}`,
+    });
 
     // Trigger asynchronous SMS alerts for absent students
     const absentRecords = records.filter(r => r.status === 'Absent');

@@ -4,7 +4,8 @@ const Student = require('../models/Student');
 const Subject = require('../models/Subject');
 const Teacher = require('../models/Teacher');
 const ExamResult = require('../models/ExamResult');
-const { teacherAssignments, canAccessStudent } = require('../middleware/recordAccess');
+const { teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent } = require('../middleware/recordAccess');
+const { logAudit } = require('../middleware/auditLog');
 const { protect, authorize } = require('../middleware/auth');
 const router = express.Router();
 const PDFDocument = require('pdfkit');
@@ -41,7 +42,7 @@ const readReportCardToken = (token) => {
 // @route   POST /api/grades
 // @desc    Enter or update a student's grade
 // @access  Private (Admin/Super-Admin/Teacher)
-router.post('/', protect, authorize('admin', 'super-admin', 'teacher'), async (req, res) => {
+router.post('/', protect, authorize('admin', 'super-admin', 'teacher', 'class-teacher'), async (req, res) => {
   const { studentId, subjectId, classId, term, academicYear, botMarks, motMarks, eotMarks, remarks } = req.body;
 
   if (!studentId || !subjectId || !classId || !term) {
@@ -62,6 +63,19 @@ router.post('/', protect, authorize('admin', 'super-admin', 'teacher'), async (r
       const { classIds, subjectIds } = await teacherAssignments(req.user._id);
       if (!classIds.includes(String(classId)) || !subjectIds.includes(String(subjectId))) {
         return res.status(403).json({ error: { message: 'You may only grade your assigned classes and subjects' } });
+      }
+      if (String(student.currentClass) !== String(classId)) {
+        return res.status(403).json({ error: { message: 'Student is not enrolled in the selected class' } });
+      }
+      for (const examType of ['BOT', 'MOT', 'EOT']) {
+        const hasPermission = await hasAcademicEntryPermission(req.user, {
+          subjectId,
+          classId,
+          term,
+          academicYear: academicYear || new Date().getFullYear(),
+          examType,
+        });
+        if (!hasPermission) return res.status(403).json({ error: { message: 'Marks entry is not currently authorized by the Director of Studies' } });
       }
     }
 
@@ -92,10 +106,19 @@ router.post('/', protect, authorize('admin', 'super-admin', 'teacher'), async (r
       gradedBy: req.user._id
     };
 
+    const previous = await Grade.findOne(filter).lean();
     const grade = await Grade.findOneAndUpdate(filter, update, {
       new: true,
       upsert: true
     }).populate('student').populate('subject').populate('gradedBy', 'name');
+
+    await logAudit(req, {
+      action: previous ? 'grade.updated' : 'grade.entered',
+      module: 'grades',
+      recordId: grade._id,
+      oldValue: previous,
+      newValue: { botMarks: bot, motMarks: mot, eotMarks: eot, totalMarks, gradeValue, remarks: remarks || '', class: classId, subject: subjectId, student: studentId },
+    });
 
     res.status(200).json(grade);
   } catch (error) {
@@ -108,7 +131,7 @@ router.post('/', protect, authorize('admin', 'super-admin', 'teacher'), async (r
 // @desc    Get grades with filters (student, class, term)
 // @access  Private
 router.get('/', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
-  const { studentId, classId, term, academicYear } = req.query;
+  const { studentId, classId, subjectId, term, academicYear } = req.query;
   const filter = {};
 
   if (studentId) filter.student = studentId;
@@ -123,8 +146,17 @@ router.get('/', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy
       filter.student = student._id;
     }
     if (['teacher', 'class-teacher'].includes(req.user.role)) {
-      const { classIds } = await teacherAssignments(req.user._id);
-      filter.class = { $in: classIds };
+      const { classIds, subjectIds } = await teacherAssignments(req.user._id);
+      if ((classId && !classIds.includes(String(classId))) || (subjectId && !subjectIds.includes(String(subjectId)))) {
+        return res.status(403).json({ error: { message: 'Not authorized to view grades for this class or subject' } });
+      }
+      filter.class = classId || { $in: classIds };
+      filter.subject = subjectId || { $in: subjectIds };
+    }
+    if (req.user.role === 'hod') {
+      const scope = await academicScope(req.user);
+      if (scope.subjectIds.length === 0) return res.status(403).json({ error: { message: 'No academic subjects are assigned to this HOD' } });
+      filter.subject = { $in: scope.subjectIds };
     }
     const grades = await Grade.find(filter)
       .populate({

@@ -9,6 +9,8 @@ const emptyForm = {
   phoneNumber: '',
   password: '',
   subjects: [],
+  departments: '',
+  role: 'teacher',
 };
 
 export default function Teachers() {
@@ -65,6 +67,8 @@ export default function Teachers() {
       phoneNumber: teacher.phoneNumber || '',
       password: '',
       subjects: (teacher.subjects || []).map((subject) => (typeof subject === 'string' ? subject : subject._id)),
+      departments: (teacher.departments || []).join(', '),
+      role: teacher.user?.role || 'teacher',
     });
     setShowModal(true);
   };
@@ -78,6 +82,8 @@ export default function Teachers() {
         qualification: formData.qualification,
         phoneNumber: formData.phoneNumber,
         subjects: formData.subjects,
+        departments: formData.departments.split(',').map(item => item.trim()).filter(Boolean),
+        role: formData.role,
       };
 
       if (editingTeacherId) {
@@ -237,6 +243,20 @@ export default function Teachers() {
                 <div style={styles.fieldGroup}>
                   <label style={styles.label}>Phone Contact</label>
                   <input type="text" name="phoneNumber" required value={formData.phoneNumber} onChange={handleChange} style={styles.input} placeholder="+256 772 123456" />
+                </div>
+
+                <div style={styles.fieldGroup}>
+                  <label style={styles.label}>Role</label>
+                  <select name="role" value={formData.role} onChange={handleChange} style={styles.input} disabled={!!editingTeacherId}>
+                    <option value="teacher">Teacher</option>
+                    <option value="class-teacher">Class Teacher</option>
+                    <option value="hod">Head of Department</option>
+                  </select>
+                </div>
+
+                <div style={styles.fieldGroup}>
+                  <label style={styles.label}>Departments</label>
+                  <input type="text" name="departments" value={formData.departments} onChange={handleChange} style={styles.input} placeholder="e.g. Sciences, Mathematics" />
                 </div>
 
                 {!editingTeacherId && (
