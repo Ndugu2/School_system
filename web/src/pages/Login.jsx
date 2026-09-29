@@ -4,22 +4,12 @@ import { GraduationCap, Mail, Lock, User, Eye, EyeOff, Loader } from 'lucide-rea
 import './Login.css';
 
 export default function Login() {
-  const { login, demoLogin, register } = useAuth();
+  const { login, register } = useAuth();
   const [isRegister, setIsRegister] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const demoRoles = [
-    { label: 'Administrator', value: 'admin' },
-    { label: 'Headteacher', value: 'headteacher' },
-    { label: 'Director of Studies', value: 'director-of-studies' },
-    { label: 'Head of Department', value: 'hod' },
-    { label: 'Finance Manager', value: 'bursar' },
-    { label: 'Teacher', value: 'teacher' },
-    { label: 'Student', value: 'student' },
-    { label: 'Parent', value: 'parent' },
-  ];
-  
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -48,19 +38,6 @@ export default function Login() {
       } else {
         setError(err.message || 'Authentication failed. Please check your credentials.');
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async (role) => {
-    setError('');
-    setLoading(true);
-
-    try {
-      await demoLogin(role);
-    } catch (err) {
-      setError(err.message || 'Demo login failed.');
     } finally {
       setLoading(false);
     }
@@ -105,7 +82,7 @@ export default function Login() {
               <p style={styles.formSubtitle}>
                 {isRegister 
                   ? 'Configure the first super-admin or add staff' 
-                  : 'Sign in with your account or choose a demo role below'}
+                  : 'Sign in with your school account'}
               </p>
             </div>
 
@@ -212,29 +189,6 @@ export default function Login() {
                 {isRegister ? 'Sign In Here' : 'Register First Admin Account'}
               </button>
             </div>
-
-            {!isRegister && (
-              <div style={styles.demoSection}>
-                <div style={styles.demoHeader}>
-                  <span>Explore a demo workspace</span>
-                  <small className="demo-helper">Use sample access to preview each portal</small>
-                </div>
-                <div style={styles.demoGrid}>
-                  {demoRoles.map((role) => (
-                    <button
-                      key={role.value}
-                      type="button"
-                      onClick={() => handleDemoLogin(role.value)}
-                      disabled={loading}
-                      className="demo-role-button"
-                      style={styles.demoButton}
-                    >
-                      {role.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -456,36 +410,4 @@ const styles = {
       textDecoration: 'underline',
     }
   },
-  demoSection: {
-    marginTop: '24px',
-    paddingTop: '20px',
-    borderTop: '1px solid var(--border)',
-  },
-  demoHeader: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '3px',
-    marginBottom: '12px',
-    color: 'var(--text-primary)',
-    fontSize: '14px',
-    fontWeight: '700',
-  },
-  demoGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    gap: '8px',
-  },
-  demoButton: {
-    minHeight: '42px',
-    padding: '9px 10px',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-sm)',
-    background: 'var(--bg-primary)',
-    color: 'var(--text-secondary)',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '600',
-    textAlign: 'left',
-    transition: 'var(--transition)',
-  }
 };

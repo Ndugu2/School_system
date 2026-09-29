@@ -2,26 +2,6 @@
   animation: login-page-in 0.5s ease-out both;
 }
 
-.demo-role-button:hover:not(:disabled),
-.demo-role-button:focus-visible {
-  border-color: var(--primary);
-  background: var(--primary-light);
-  color: var(--primary);
-  transform: translateY(-1px);
-  outline: none;
-}
-
-.demo-helper {
-  color: var(--text-tertiary);
-  font-size: 12px;
-  font-weight: 400;
-}
-
-.demo-role-button:disabled {
-  cursor: wait;
-  opacity: 0.6;
-}
-
 .login-form-section input:focus,
 .login-form-section select:focus {
   border-color: var(--primary);
@@ -84,9 +64,5 @@
 
   .login-form-section {
     padding: 28px 20px !important;
-  }
-
-  .demo-grid {
-    grid-template-columns: 1fr !important;
   }
 }
