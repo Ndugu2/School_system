@@ -69,6 +69,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const demoLogin = async (role = 'admin') => {
+    setLoading(true);
+    setInactive(false);
+    try {
+      const data = await api.post('/auth/demo-login', { role });
+      const nextUser = buildUser(data, role);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(nextUser));
+      setUser(nextUser);
+      return data;
+    } catch (err) {
+      if (err.status === 403) setInactive(true);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const register = async (name, email, password, role) => {
     setLoading(true);
     setInactive(false);
@@ -88,7 +106,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, inactive, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, inactive, login, demoLogin, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
