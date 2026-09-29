@@ -47,10 +47,19 @@ const auditLogSchema = new mongoose.Schema({
       'registration.cancelled',
       // Results
       'result.entered',
+      'result.updated',
+      'result.submitted',
+      'result.returned',
       'result.hod-approved',
       'result.admin-approved',
       'result.published',
       'result.unpublished',
+      // Academic Permissions
+      'academic-permission.granted',
+      'academic-permission.updated',
+      'academic-permission.revoked',
+      // Teachers
+      'teacher.academic-assigned',
       // Admissions
       'application.accepted',
       'application.rejected',
@@ -79,7 +88,8 @@ const auditLogSchema = new mongoose.Schema({
     enum: [
       'students', 'registrations', 'admissions', 'finance',
       'payments', 'results', 'attendance', 'discipline',
-      'users', 'settings', 'academic-years', 'subjects'
+      'users', 'settings', 'academic-years', 'subjects',
+      'academic-permissions', 'teachers'
     ]
   },
   recordId: {

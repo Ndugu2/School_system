@@ -5,8 +5,9 @@ const { protect, authorize } = require('../middleware/auth');
 
 // @desc  Get audit logs with filters
 // @route GET /api/audit-logs
-// Only super-admin and admin can query audit logs
-router.get('/', protect, authorize('super-admin', 'admin'), async (req, res) => {
+// Only super-admin and admin can query all audit logs.
+// Academic leaders (DOS / academic-admin) are limited to academic modules.
+router.get('/', protect, authorize('super-admin', 'admin', 'director-of-studies', 'academic-admin'), async (req, res) => {
   try {
     const {
       user,
@@ -23,6 +24,10 @@ router.get('/', protect, authorize('super-admin', 'admin'), async (req, res) => 
     if (user) query.user = user;
     if (action) query.action = action;
     if (module) query.module = module;
+    // Academic leaders are limited to the academic audit trail, regardless of filters
+    if (['director-of-studies', 'academic-admin'].includes(req.user.role)) {
+      query.module = { $in: ['academic-permissions', 'results', 'teachers', 'subjects'] };
+    }
     if (recordId) query.recordId = recordId;
 
     if (startDate || endDate) {
@@ -46,7 +51,7 @@ router.get('/', protect, authorize('super-admin', 'admin'), async (req, res) => 
 
 // @desc  Get audit logs for a specific record
 // @route GET /api/audit-logs/record/:recordId
-router.get('/record/:recordId', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.get('/record/:recordId', protect, authorize('super-admin', 'admin', 'director-of-studies', 'academic-admin'), async (req, res) => {
   try {
     const logs = await AuditLog.find({ recordId: req.params.recordId })
       .populate('user', 'name email role')

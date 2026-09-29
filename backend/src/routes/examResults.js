@@ -8,7 +8,7 @@ const { logAudit } = require('../middleware/auditLog');
 const { teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent, hasAssignedClass } = require('../middleware/recordAccess');
 
 const ENTRY_ROLES = ['super-admin', 'admin', 'academic-admin', 'teacher', 'class-teacher'];
-const APPROVAL_ROLES = ['super-admin', 'admin', 'academic-admin', 'hod'];
+const APPROVAL_ROLES = ['super-admin', 'admin', 'academic-admin', 'hod', 'director-of-studies'];
 
 const validateTeacherAssignments = async (user, results) => {
   if (!['teacher', 'class-teacher'].includes(user.role)) return null;
@@ -52,7 +52,7 @@ const getGrade = (percentage) => {
 
 // @desc  Get results with filters
 // @route GET /api/exam-results
-router.get('/', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
+router.get('/', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 'deputy-head', 'academic-admin', 'director-of-studies', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
   try {
     const { student, class: classId, subject, term, academicYear, examType, approvalStatus, page = 1, limit = 100 } = req.query;
 
@@ -116,7 +116,7 @@ router.get('/', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 
 
 // @desc  Get full report card data for a student for a term
 // @route GET /api/exam-results/report-card/:studentId
-router.get('/report-card/:studentId', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
+router.get('/report-card/:studentId', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 'deputy-head', 'academic-admin', 'director-of-studies', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
   try {
     const { term, academicYear } = req.query;
     if (!term || !academicYear) return res.status(400).json({ error: { message: 'term and academicYear are required' } });
@@ -401,6 +401,12 @@ router.patch('/return-revision', protect, authorize(...APPROVAL_ROLES), async (r
       filter.subject = subject || { $in: scope.subjectIds };
     }
     const result = await ExamResult.updateMany(filter, { $set: { approvalStatus: 'draft' } });
+    await logAudit(req, {
+      action: 'result.returned',
+      module: 'results',
+      recordId: req.user._id,
+      description: `Returned ${result.modifiedCount} results for revision for ${term} ${academicYear}`,
+    });
     res.json({ message: `${result.modifiedCount} results returned for revision`, modifiedCount: result.modifiedCount });
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
@@ -409,7 +415,7 @@ router.patch('/return-revision', protect, authorize(...APPROVAL_ROLES), async (r
 
 // @desc  Admin publishes results (makes visible to students/parents)
 // @route PATCH /api/exam-results/publish
-router.patch('/publish', protect, authorize('super-admin', 'admin', 'academic-admin'), async (req, res) => {
+router.patch('/publish', protect, authorize('super-admin', 'admin', 'academic-admin', 'director-of-studies'), async (req, res) => {
   const { class: classId, subject, term, academicYear } = req.body;
 
   const filter = { term, academicYear: parseInt(academicYear), approvalStatus: 'hod-approved' };
