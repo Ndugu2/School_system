@@ -2,6 +2,7 @@ const express = require('express');
 const Teacher = require('../models/Teacher');
 const User = require('../models/User');
 const { protect, authorize } = require('../middleware/auth');
+const { logAudit } = require('../middleware/auditLog');
 const router = express.Router();
 
 // @route   POST /api/teachers
@@ -107,6 +108,49 @@ router.put('/:id', protect, authorize('admin', 'super-admin'), async (req, res) 
     if (Array.isArray(departments)) teacher.departments = departments;
 
     await teacher.save();
+
+    const updatedTeacher = await Teacher.findById(teacher._id)
+      .populate('user', '-password')
+      .populate('subjects')
+      .populate('classes');
+
+    res.status(200).json(updatedTeacher);
+  } catch (error) {
+    res.status(500).json({ error: { message: error.message } });
+  }
+});
+
+// @route   PATCH /api/teachers/:id/academic-assignment
+// @desc    Update a teacher's academic assignment (subjects / classes / departments only)
+// @access  Private (Admin/Super-Admin/DOS/Academic-Admin)
+router.patch('/:id/academic-assignment', protect, authorize('admin', 'super-admin', 'director-of-studies', 'academic-admin'), async (req, res) => {
+  const { subjects, classes, departments } = req.body;
+
+  try {
+    const teacher = await Teacher.findById(req.params.id);
+    if (!teacher) {
+      return res.status(404).json({ error: { message: 'Teacher profile not found' } });
+    }
+
+    const old = teacher.toObject();
+    if (Array.isArray(subjects)) teacher.subjects = subjects;
+    if (Array.isArray(classes)) teacher.classes = classes;
+    if (Array.isArray(departments)) teacher.departments = departments;
+
+    if (!Array.isArray(subjects) && !Array.isArray(classes) && !Array.isArray(departments)) {
+      return res.status(400).json({ error: { message: 'Provide at least one of subjects, classes, or departments' } });
+    }
+
+    await teacher.save();
+
+    await logAudit(req, {
+      action: 'teacher.academic-assigned',
+      module: 'teachers',
+      recordId: teacher._id,
+      oldValue: { subjects: old.subjects?.map(String), classes: old.classes?.map(String), departments: old.departments },
+      newValue: { subjects: teacher.subjects.map(String), classes: teacher.classes.map(String), departments: teacher.departments },
+      description: `Academic assignment updated for teacher by ${req.user.name || req.user.role}`,
+    });
 
     const updatedTeacher = await Teacher.findById(teacher._id)
       .populate('user', '-password')
