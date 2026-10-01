@@ -18,4 +18,28 @@ const roleMatches = (role, allowedRoles) => {
 };
 const hasRole = (user, roles) => Boolean(user && roleMatches(user.role, roles));
 
-module.exports = { ROLES, ADMIN_ROLES, ACADEMIC_ROLES, STUDENT_MANAGEMENT_ROLES, FINANCE_ROLES, hasRole, roleMatches };
+// Server-authoritative post-login landing. The frontend must honor this value
+// returned by /auth/login and /auth/me (falling back to its own copy of the
+// map only when it is missing) so that every role is routed to its dedicated
+// portal view instead of a client-only heuristic.
+const DEFAULT_HOME = 'dashboard';
+const ROLE_HOME = Object.freeze({
+  [ROLES.SUPER_ADMIN]: 'dashboard',
+  [ROLES.ADMIN]: 'dashboard',
+  [ROLES.HEADTEACHER]: 'dashboard',
+  [ROLES.DIRECTOR_OF_STUDIES]: 'dashboard',
+  [ROLES.HOD]: 'dashboard',
+  [ROLES.TEACHER]: 'dashboard',
+  [ROLES.CLASS_TEACHER]: 'dashboard',
+  [ROLES.STUDENT]: 'dashboard',
+  [ROLES.PARENT]: 'parent_portal',
+  [ROLES.BURSAR]: 'dashboard',
+  [ROLES.SUPERVISOR]: 'dashboard',
+  [ROLES.DEPUTY_HEAD]: 'dashboard',
+  [ROLES.REGISTRAR]: 'dashboard',
+  [ROLES.ACADEMIC_ADMIN]: 'dashboard',
+  [ROLES.INVENTORY_MANAGER]: 'dashboard',
+});
+const getLandingForRole = (role) => ROLE_HOME[role] || DEFAULT_HOME;
+
+module.exports = { ROLES, ADMIN_ROLES, ACADEMIC_ROLES, STUDENT_MANAGEMENT_ROLES, FINANCE_ROLES, hasRole, roleMatches, getLandingForRole, ROLE_HOME, DEFAULT_HOME };

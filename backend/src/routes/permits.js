@@ -62,7 +62,7 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 // ── 3. POST /api/permits/issue — Issue or Refresh a Class Entry Permit ───────
-router.post('/issue', protect, authorize('super-admin', 'admin', 'headteacher', 'dos', 'teacher'), async (req, res) => {
+router.post('/issue', protect, authorize('super-admin', 'admin', 'headteacher', 'director-of-studies', 'teacher'), async (req, res) => {
   try {
     const { studentId, term, academicYear, stream, optionalSubjects } = req.body;
 

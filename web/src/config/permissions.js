@@ -11,7 +11,7 @@ const academicStaff = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.D
 const directorStudiesAccess = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.SUPERVISOR, ROLES.DEPUTY_HEAD, ROLES.HOD, ROLES.ACADEMIC_ADMIN, ROLES.DIRECTOR_OF_STUDIES];
 
 export const TAB_ACCESS = Object.freeze({
-  dashboard: [...directorStudiesAccess, ROLES.BURSAR, ROLES.REGISTRAR, ROLES.INVENTORY_MANAGER, ROLES.TEACHER, ROLES.STUDENT, ROLES.PARENT],
+  dashboard: [...directorStudiesAccess, ROLES.BURSAR, ROLES.REGISTRAR, ROLES.INVENTORY_MANAGER, ROLES.TEACHER, ROLES.CLASS_TEACHER, ROLES.STUDENT, ROLES.PARENT],
   parent_portal: [ROLES.PARENT],
   admissions: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.REGISTRAR],
   students: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.REGISTRAR, ROLES.SUPERVISOR, ROLES.DEPUTY_HEAD, ROLES.ACADEMIC_ADMIN, ROLES.DIRECTOR_OF_STUDIES, ROLES.CLASS_TEACHER, ROLES.TEACHER],
@@ -36,3 +36,27 @@ export const TAB_ACCESS = Object.freeze({
 
 const inheritedRole = (role) => ({ [ROLES.HEADTEACHER]: ROLES.ADMIN, [ROLES.HOD]: ROLES.ACADEMIC_ADMIN, [ROLES.DIRECTOR_OF_STUDIES]: ROLES.ACADEMIC_ADMIN }[role] || role);
 export const canAccessTab = (role, tab) => (TAB_ACCESS[tab] || []).includes(inheritedRole(role));
+
+// Mirrors backend/src/config/roles.js so every role is routed to its dedicated
+// portal after login. The server-provided `landing` (from /auth/login & /auth/me)
+// takes precedence; this map is the local fallback.
+export const DEFAULT_HOME = 'dashboard';
+export const ROLE_HOME = Object.freeze({
+  [ROLES.SUPER_ADMIN]: 'dashboard',
+  [ROLES.ADMIN]: 'dashboard',
+  [ROLES.HEADTEACHER]: 'dashboard',
+  [ROLES.DIRECTOR_OF_STUDIES]: 'dashboard',
+  [ROLES.HOD]: 'dashboard',
+  [ROLES.TEACHER]: 'dashboard',
+  [ROLES.CLASS_TEACHER]: 'dashboard',
+  [ROLES.STUDENT]: 'dashboard',
+  [ROLES.PARENT]: 'parent_portal',
+  [ROLES.BURSAR]: 'dashboard',
+  [ROLES.SUPERVISOR]: 'dashboard',
+  [ROLES.DEPUTY_HEAD]: 'dashboard',
+  [ROLES.REGISTRAR]: 'dashboard',
+  [ROLES.ACADEMIC_ADMIN]: 'dashboard',
+  [ROLES.INVENTORY_MANAGER]: 'dashboard',
+});
+
+export const roleHome = (role) => ROLE_HOME[role] || DEFAULT_HOME;

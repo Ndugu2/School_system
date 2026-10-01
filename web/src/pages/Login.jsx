@@ -43,7 +43,11 @@ export default function Login() {
         await login(formData.email, formData.password);
       }
     } catch (err) {
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      if (err.status === 403) {
+        setError('Your account has been deactivated. Please contact the school administrator to reactivate it.');
+      } else {
+        setError(err.message || 'Authentication failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
