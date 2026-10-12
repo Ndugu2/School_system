@@ -1,5 +1,14 @@
 const mongoose = require('mongoose');
 
+const guardianSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  relationship: { type: String, trim: true, default: 'Guardian' },
+  phone: { type: String, trim: true },
+  email: { type: String, trim: true, lowercase: true },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  isPrimary: { type: Boolean, default: false },
+}, { _id: true });
+
 const studentSchema = new mongoose.Schema({
 
   // ── User Account Link ────────────────────────────────────────────────────────
@@ -130,6 +139,10 @@ const studentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null
+  },
+  guardians: {
+    type: [guardianSchema],
+    default: [],
   },
 
   // ── Secondary Contact ─────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ const Class = require('../models/Class');
 const MealCard = require('../models/MealCard');
 const StudentPass = require('../models/StudentPass');
 const { protect, authorize } = require('../middleware/auth');
+const { canAccessStudent } = require('../middleware/recordAccess');
 const router = express.Router();
 
 // Helper to generate unique Receipt Numbers
@@ -184,7 +185,7 @@ router.post('/payments', protect, authorize('super-admin', 'admin', 'bursar', 'p
     if (!student) {
       return res.status(404).json({ error: { message: 'Student not found' } });
     }
-    if (req.user.role === 'parent' && String(student.parentUser) !== String(req.user._id) && student.parentEmail !== req.user.email) {
+    if (req.user.role === 'parent' && !(await canAccessStudent(req.user, student._id))) {
       return res.status(403).json({ error: { message: 'Not authorized to pay for this student' } });
     }
     if (req.user.role === 'student' && String(student.user) !== String(req.user._id)) {
@@ -368,7 +369,7 @@ router.get('/invoice/:studentId/:term', protect, async (req, res) => {
     if (!student) {
       return res.status(404).json({ error: { message: 'Student not found' } });
     }
-    if (req.user.role === 'parent' && String(student.parentUser) !== String(req.user._id) && student.parentEmail !== req.user.email) {
+    if (req.user.role === 'parent' && !(await canAccessStudent(req.user, student._id))) {
       return res.status(403).json({ error: { message: 'Not authorized to view this invoice' } });
     }
     if (req.user.role === 'student' && String(student.user) !== String(req.user._id)) {
@@ -474,11 +475,10 @@ router.get('/payment-plans/:studentId/:term', protect, async (req, res) => {
   try {
     const administrativeRoles = ['super-admin', 'admin', 'headteacher', 'bursar'];
     if (!administrativeRoles.includes(req.user.role)) {
-      const student = await Student.findById(studentId).select('user parentUser parentEmail');
+      const student = await Student.findById(studentId).select('user parentUser parentEmail guardians');
       const isStudentOwner = req.user.role === 'student' && String(student?.user) === String(req.user._id);
       const isParentOwner = req.user.role === 'parent' && (
-        String(student?.parentUser) === String(req.user._id) ||
-        student?.parentEmail === req.user.email
+        await canAccessStudent(req.user, studentId)
       );
 
       if (!isStudentOwner && !isParentOwner) {
@@ -547,7 +547,7 @@ router.get('/invoice-pdf/:studentId/:term', protect, async (req, res) => {
     if (!student) {
       return res.status(404).json({ error: { message: 'Student not found' } });
     }
-    if (req.user.role === 'parent' && String(student.parentUser) !== String(req.user._id) && student.parentEmail !== req.user.email) {
+    if (req.user.role === 'parent' && !(await canAccessStudent(req.user, student._id))) {
       return res.status(403).json({ error: { message: 'Not authorized to download this invoice' } });
     }
     if (req.user.role === 'student' && String(student.user) !== String(req.user._id)) {

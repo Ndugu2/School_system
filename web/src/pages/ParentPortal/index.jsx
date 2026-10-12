@@ -10,6 +10,10 @@ export default function ParentPortal() {
   const [loading, setLoading] = useState(true);
   const [childrenLoading, setChildrenLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [momoPhone, setMomoPhone] = useState('');
+  const [momoPayment, setMomoPayment] = useState(null);
+  const [momoLoading, setMomoLoading] = useState(false);
+  const [momoMessage, setMomoMessage] = useState('');
 
   useEffect(() => {
     // The API returns only children linked to the signed-in parent account or verified parent email.
@@ -28,24 +32,18 @@ export default function ParentPortal() {
     Promise.allSettled([
       api.get(`/exam-results?student=${selectedChild._id}&term=Term 1&academicYear=${new Date().getFullYear()}&approvalStatus=published`),
       api.get(`/attendance?studentId=${selectedChild._id}&term=Term 1`),
-      api.get(`/fees/invoice/${selectedChild._id}/Term%201?academicYear=${new Date().getFullYear()}`),
+      api.get('/finance/my-invoices'),
       api.get(`/finance/wallets/${selectedChild._id}`),
     ]).then(([gradesResult, attendanceResult, financeResult, walletResult]) => {
       const examResults = gradesResult.status === 'fulfilled' ? gradesResult.value.results || [] : [];
-      const invoiceResult = financeResult.status === 'fulfilled' ? financeResult.value : null;
-      const invoice = invoiceResult?.summary ? {
-        invoiceNumber: `TERM-${invoiceResult.academicYear}-${invoiceResult.term}`,
-        status: invoiceResult.summary.balance > 0 ? 'pending' : 'paid',
-        term: invoiceResult.term,
-        dueDate: new Date(),
-        totalAmount: invoiceResult.summary.totalInvoiced,
-        balance: invoiceResult.summary.balance,
-      } : null;
+      const invoices = financeResult.status === 'fulfilled'
+        ? financeResult.value.filter(invoice => String(invoice.student) === String(selectedChild._id))
+        : [];
       const wallet = walletResult.status === 'fulfilled' ? walletResult.value : { balance: 0, dailyLimit: 10000, transactions: [] };
       setDashboardData({
         grades: examResults.map(result => ({ ...result, score: result.percentage, assessmentType: result.examType })),
         attendance: attendanceResult.status === 'fulfilled' ? attendanceResult.value : [],
-        finance: invoice ? [invoice] : [],
+        finance: invoices,
         wallet,
       });
     }).catch(console.error)
@@ -72,6 +70,49 @@ export default function ParentPortal() {
   // Process finance
   const unpaidInvoices = finance.filter(i => i.status !== 'paid' && i.status !== 'waived');
   const totalBalance = unpaidInvoices.reduce((sum, inv) => sum + inv.balance, 0);
+
+  const requestMomoPayment = async (invoice) => {
+    setMomoLoading(true);
+    setMomoMessage('');
+    try {
+      const result = await api.post('/finance/momo/request', {
+        invoiceId: invoice._id,
+        amount: invoice.balance,
+        phoneNumber: momoPhone,
+      });
+      setMomoPayment(result.payment);
+      setMomoMessage(result.message);
+    } catch (error) {
+      setMomoMessage(error.message || 'Could not start the MTN MoMo payment');
+    } finally {
+      setMomoLoading(false);
+    }
+  };
+
+  const checkMomoPayment = async () => {
+    if (!momoPayment?._id) return;
+    setMomoLoading(true);
+    try {
+      const result = await api.get(`/finance/momo/requests/${momoPayment._id}`);
+      setMomoPayment(result);
+      setMomoMessage(result.status === 'successful'
+        ? `Payment confirmed. Receipt: ${result.paymentReceipt?.receiptNumber || 'issued'}.`
+        : result.status === 'failed'
+          ? `Payment failed: ${result.failureReason || 'MTN MoMo declined the request'}.`
+          : 'Payment is still awaiting MTN MoMo confirmation.');
+      if (result.status === 'successful') {
+        const invoices = await api.get('/finance/my-invoices');
+        setDashboardData(current => ({
+          ...current,
+          finance: invoices.filter(invoice => String(invoice.student) === String(selectedChild._id)),
+        }));
+      }
+    } catch (error) {
+      setMomoMessage(error.message || 'Could not check the MTN MoMo payment');
+    } finally {
+      setMomoLoading(false);
+    }
+  };
 
   return (
     <div style={s.container}>
@@ -196,6 +237,10 @@ export default function ParentPortal() {
           <h3 style={s.cardTitle}><CreditCard size={18} color="var(--primary)" style={{ marginRight: 8 }} /> Financial Ledger</h3>
           {finance.length === 0 ? <p style={s.empty}>No financial records.</p> : (
             <div style={s.invoiceList}>
+              <label style={{ display: 'grid', gap: 6, maxWidth: 360 }}>
+                <span>MTN MoMo phone number</span>
+                <input value={momoPhone} onChange={event => setMomoPhone(event.target.value)} placeholder="07XXXXXXXX or +2567XXXXXXXX" />
+              </label>
               {finance.map(inv => (
                 <div key={inv._id} style={s.invoiceItem}>
                   <div>
@@ -210,9 +255,12 @@ export default function ParentPortal() {
                   <div style={{ textAlign: 'right' }}>
                     <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Total: UGX {inv.totalAmount.toLocaleString()}</p>
                     <p style={{ fontSize: 15, fontWeight: 800, color: inv.balance > 0 ? '#ef4444' : '#10b981' }}>Bal: UGX {inv.balance.toLocaleString()}</p>
+                    {inv.balance > 0 && <button style={s.payBtn} disabled={momoLoading || !momoPhone} onClick={() => requestMomoPayment(inv)}>Pay full balance with MTN MoMo</button>}
                   </div>
                 </div>
               ))}
+              {momoPayment?.status === 'pending' && <button style={s.payBtn} disabled={momoLoading} onClick={checkMomoPayment}>Check MTN MoMo status</button>}
+              {momoMessage && <p role="status">{momoMessage}</p>}
             </div>
           )}
         </div>

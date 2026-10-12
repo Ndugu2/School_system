@@ -62,19 +62,18 @@ try {
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:4173'];
+  : process.env.NODE_ENV === 'production'
+    ? []
+    : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:4173'];
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (server-to-server, mobile apps, curl)
     if (!origin) return callback(null, true);
 
-    const isAllowed =
-      allowedOrigins.includes('*') ||
-      allowedOrigins.includes(origin) ||
-      origin.endsWith('.vercel.app') ||
-      origin.includes('localhost') ||
-      origin.includes('127.0.0.1');
+    const isLocalDevelopmentOrigin = process.env.NODE_ENV !== 'production' &&
+      (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'));
+    const isAllowed = allowedOrigins.includes(origin) || isLocalDevelopmentOrigin;
 
     if (isAllowed) {
       return callback(null, true);
@@ -138,11 +137,13 @@ app.use('/api/fees',            require('./routes/fees'));
 
 // ── Phase 1: Foundation Routes ────────────────────────────────────────────────
 app.use('/api/academic-years',      require('./routes/academicYears'));
+app.use('/api/grading-schemes',     require('./routes/gradingSchemes'));
 app.use('/api/academic-permissions', require('./routes/academicPermissions'));
 app.use('/api/materials',            require('./routes/materials'));
 app.use('/api/registrations',       require('./routes/registrations'));
 app.use('/api/requirements',        require('./routes/requirements'));
 app.use('/api/permits',              require('./routes/permits'));
+app.use('/api/report-cards',         require('./routes/reportCards'));
 
 // ── Audit Log (read-only, super-admin) ───────────────────────────────────────
 app.use('/api/audit-logs',          require('./routes/auditLogs'));
@@ -230,7 +231,10 @@ const runDailyJobs = async () => {
 };
 
 // Vercel / External Cron webhook endpoint
-app.all('/api/cron/daily', async (req, res) => {
+app.get('/api/cron/daily', async (req, res) => {
+  if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).json({ error: { message: 'Not authorized' } });
+  }
   try {
     await connectDB();
     await runDailyJobs();

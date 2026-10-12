@@ -6,7 +6,7 @@ const { protect, authorize } = require('../middleware/auth');
 // @desc  Get audit logs with filters
 // @route GET /api/audit-logs
 // Only super-admin and admin can query audit logs
-router.get('/', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.get('/', protect, authorize('super-admin', 'admin', 'director-of-studies', 'academic-admin'), async (req, res) => {
   try {
     const {
       user,
@@ -20,9 +20,15 @@ router.get('/', protect, authorize('super-admin', 'admin'), async (req, res) => 
     } = req.query;
 
     const query = {};
+    if (['director-of-studies', 'academic-admin'].includes(req.user.role)) {
+      query.module = { $in: ['results', 'subjects', 'teachers', 'academic-permissions', 'academic-years'] };
+    }
     if (user) query.user = user;
     if (action) query.action = action;
-    if (module) query.module = module;
+    if (module) {
+      if (query.module && !query.module.$in.includes(module)) return res.status(403).json({ error: { message: 'Academic audit access is limited to academic records' } });
+      query.module = module;
+    }
     if (recordId) query.recordId = recordId;
 
     if (startDate || endDate) {
@@ -46,9 +52,11 @@ router.get('/', protect, authorize('super-admin', 'admin'), async (req, res) => 
 
 // @desc  Get audit logs for a specific record
 // @route GET /api/audit-logs/record/:recordId
-router.get('/record/:recordId', protect, authorize('super-admin', 'admin'), async (req, res) => {
+router.get('/record/:recordId', protect, authorize('super-admin', 'admin', 'director-of-studies', 'academic-admin'), async (req, res) => {
   try {
-    const logs = await AuditLog.find({ recordId: req.params.recordId })
+    const query = { recordId: req.params.recordId };
+    if (['director-of-studies', 'academic-admin'].includes(req.user.role)) query.module = { $in: ['results', 'subjects', 'teachers', 'academic-permissions', 'academic-years'] };
+    const logs = await AuditLog.find(query)
       .populate('user', 'name email role')
       .sort({ timestamp: -1 });
     res.json(logs);

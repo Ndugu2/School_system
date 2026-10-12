@@ -1,6 +1,8 @@
 # 📱 School Management System — Mobile Application
 
-Mobile client for **Teachers**, **Supervisors**, **Parents**, and **Students** built with **React Native** and **Expo**.
+React Native / Expo **UI preview** for teacher, supervisor, parent, and student portal concepts.
+
+> This application is a demo, not a production-connected client. It uses hard-coded sample records and a role switcher instead of authentication. No attendance, grades, payments, SMS, or gate-pass actions are submitted to the backend. Do not use the displayed student or financial data as real records.
 
 ---
 
@@ -16,12 +18,9 @@ Mobile client for **Teachers**, **Supervisors**, **Parents**, and **Students** b
 - **Disciplinary Incident Dossiers**: Log infractions with severity flags (*Low*, *Medium*, *High*), investigative notes, and automatic parent SMS notification.
 - **Campus Gate Audit**: Real-time counter of active off-campus boarders and exeat approvals.
 
-### 👨‍👩‍👧 Parent Portal
-- **Multi-Child Profile Switcher**: Toggle between enrolled students from a single view.
-- **Real-time Attendance Status**: Monitor daily arrival, absences, and excused leaves.
-- **Fee Ledger & Mobile Money**: View outstanding balances in UGX with one-click **MTN MoMo** or **Airtel Money** payment dispatch.
-- **Terminal Report Cards**: Review division standing and individual subject breakdown.
-- **Exeat Leave Pass Approval**: Authorize boarder gate departure with secure SMS OTP.
+### 👨‍👩‍👧 Parent Portal preview
+- Shows sample child, fee, and report-card layouts.
+- Does not submit payments or authorize gate passes. MTN MoMo is available through the authenticated web Parent Portal only.
 
 ### 🎓 Student Portal
 - **Holiday LMS**: Downloadable course modules, revision past papers, and digital study packs.

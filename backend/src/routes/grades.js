@@ -4,26 +4,17 @@ const Student = require('../models/Student');
 const Subject = require('../models/Subject');
 const Teacher = require('../models/Teacher');
 const ExamResult = require('../models/ExamResult');
-const { teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent } = require('../middleware/recordAccess');
+const { teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent, parentStudentFilter } = require('../middleware/recordAccess');
 const { logAudit } = require('../middleware/auditLog');
 const { protect, authorize } = require('../middleware/auth');
 const router = express.Router();
 const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 const crypto = require('crypto');
+const { gradeForPercentage, calculateWeightedScore, getGradingScheme, weightedAssessmentComponents } = require('../utils/grading');
 
 // Helper to determine Uganda grade value based on marks
-const calculateUgGrade = (marks) => {
-  if (marks >= 90) return 'D1';
-  if (marks >= 80) return 'D2';
-  if (marks >= 70) return 'C3';
-  if (marks >= 65) return 'C4';
-  if (marks >= 60) return 'C5';
-  if (marks >= 50) return 'C6';
-  if (marks >= 45) return 'P7';
-  if (marks >= 40) return 'P8';
-  return 'F9';
-};
+const calculateUgGrade = (marks, bands) => gradeForPercentage(marks, bands).grade;
 
 const reportCardToken = (studentId, term, academicYear) => {
   const payload = Buffer.from(JSON.stringify({ studentId, term, academicYear })).toString('base64url');
@@ -80,19 +71,16 @@ router.post('/', protect, authorize('admin', 'super-admin', 'teacher', 'class-te
     }
 
     const year = academicYear || new Date().getFullYear();
+    const gradingScheme = await getGradingScheme(student.currentClassLevel, year);
 
-    // Calculate total marks.
-    // In many schools: 30% from CA (BOT + MOT / 2) + 70% from EOT, or simply average or total.
-    // Let's assume totalMarks = eotMarks for simplicity, or calculated as a weighted sum:
-    // botMarks (15%) + motMarks (15%) + eotMarks (70%)
-    // Let's allow simple total input, or calculate from eot if others aren't given.
     const bot = parseFloat(botMarks) || 0;
     const mot = parseFloat(motMarks) || 0;
     const eot = parseFloat(eotMarks) || 0;
-    
-    // Weighted formula: BOT (15%) + MOT (15%) + EOT (70%)
-    const totalMarks = Math.round((bot * 0.15) + (mot * 0.15) + (eot * 0.70));
-    const gradeValue = calculateUgGrade(totalMarks);
+    const totalMarks = calculateWeightedScore(
+      { BOT: bot, MOT: mot, EOT: eot },
+      gradingScheme.assessmentWeights
+    );
+    const gradeValue = calculateUgGrade(totalMarks, gradingScheme.gradeBands);
 
     const filter = { student: studentId, subject: subjectId, term, academicYear: year };
     const update = {
@@ -141,7 +129,7 @@ router.get('/', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy
 
   try {
     if (['student', 'parent'].includes(req.user.role)) {
-      const student = await Student.findOne(req.user.role === 'student' ? { user: req.user._id } : { $or: [{ parentUser: req.user._id }, { parentEmail: req.user.email }] }).select('_id');
+      const student = await Student.findOne(req.user.role === 'student' ? { user: req.user._id } : parentStudentFilter(req.user)).select('_id');
       if (!student) return res.json([]);
       filter.student = student._id;
     }
@@ -195,15 +183,13 @@ router.get('/report-card/:studentId/:term', protect, authorize('admin', 'super-a
       .populate('subject')
       .populate('gradedBy', 'name');
 
-    // Aggregate division/aggregates for O-Level:
-    // Sum of best 8 subjects' grade numbers (D1=1, D2=2, C3=3, C4=4, C5=5, C6=6, P7=7, P8=8, F9=9)
-    // Division is determined by total aggregates and passes in English & Math
+    const gradingScheme = await getGradingScheme(student.currentClassLevel, Number(academicYear));
     let totalAggregates = 0;
     let subjectCount = 0;
-    const gradeMap = { D1: 1, D2: 2, C3: 3, C4: 4, C5: 5, C6: 6, P7: 7, P8: 8, F9: 9 };
+    const gradeMap = Object.fromEntries(gradingScheme.gradeBands.map(band => [band.grade, band.points]));
 
     grades.forEach(g => {
-      const value = gradeMap[g.gradeValue] || 9;
+      const value = gradeMap[g.gradeValue] ?? Math.max(...gradingScheme.gradeBands.map(band => band.points));
       totalAggregates += value;
       subjectCount++;
     });
@@ -272,6 +258,7 @@ router.get('/report-card/:studentId/:term/pdf', protect, authorize('admin', 'sup
       .populate('subject', 'name code')
       .sort({ 'subject.name': 1, examType: 1 });
     const isUace = ['S5', 'S6'].includes(student.currentClassLevel);
+    const gradingScheme = await getGradingScheme(student.currentClassLevel, academicYear);
     const token = reportCardToken(studentId, term, academicYear);
     const verificationUrl = `${process.env.PUBLIC_API_URL || 'http://localhost:5000/api'}/grades/report-card/verify/${token}`;
     const qrData = await QRCode.toDataURL(verificationUrl, { margin: 1, width: 100 });
@@ -320,16 +307,13 @@ router.get('/report-card/:studentId/:term/pdf', protect, authorize('admin', 'sup
 
     if (!isUace) {
       const widths = [190, 72, 72, 72, pageW - 406];
-      drawHeader(['Subject', 'Formative 20%', 'Summative 80%', 'Final / 100', 'Grade & Remarks'], widths);
+      drawHeader(['Subject', `Coursework ${gradingScheme.assessmentWeights.BOT + gradingScheme.assessmentWeights.MOT}%`, `Exam ${gradingScheme.assessmentWeights.EOT}%`, 'Final / 100', 'Grade & Remarks'], widths);
       [...bySubject.values()].forEach((subjectResults, index) => {
         const first = subjectResults[0];
-        const formative = subjectResults.filter(result => ['BOT', 'MOT', 'coursework', 'assignment'].includes(result.examType));
-        const summative = subjectResults.filter(result => ['EOT', 'mock'].includes(result.examType));
-        const average = list => list.length ? list.reduce((sum, result) => sum + (result.percentage ?? (result.marksObtained / result.maxMarks) * 100), 0) / list.length : 0;
-        const formativeScore = Math.round(average(formative) * 0.2);
-        const summativeScore = Math.round(average(summative) * 0.8);
-        const finalScore = formativeScore + summativeScore;
-        drawRow([first.subject?.name || first.subject?.code, formativeScore, summativeScore, finalScore, `${calculateUgGrade(finalScore)}${first.remarks ? ` - ${first.remarks}` : ''}`], widths, index);
+        const components = weightedAssessmentComponents(subjectResults, gradingScheme.assessmentWeights);
+        const courseworkScore = components.BOT + components.MOT;
+        const finalScore = Math.round(courseworkScore + components.EOT);
+        drawRow([first.subject?.name || first.subject?.code, courseworkScore, components.EOT, finalScore, `${calculateUgGrade(finalScore, gradingScheme.gradeBands)}${first.remarks ? ` - ${first.remarks}` : ''}`], widths, index);
       });
     } else {
       const widths = [190, 92, 92, pageW - 374];
@@ -337,9 +321,8 @@ router.get('/report-card/:studentId/:term/pdf', protect, authorize('admin', 'sup
       [...bySubject.values()].forEach((subjectResults, index) => {
         const result = subjectResults.find(item => item.examType === 'EOT') || subjectResults[0];
         const percentage = result.percentage ?? Math.round((result.marksObtained / result.maxMarks) * 100);
-        const grade = percentage >= 80 ? 'A' : percentage >= 70 ? 'B' : percentage >= 60 ? 'C' : percentage >= 50 ? 'D' : percentage >= 40 ? 'E' : 'F';
-        const points = { A: 6, B: 5, C: 4, D: 3, E: 2, F: 0 }[grade];
-        drawRow([result.subject?.name || result.subject?.code, percentage, grade, points], widths, index);
+        const band = gradeForPercentage(percentage, gradingScheme.gradeBands);
+        drawRow([result.subject?.name || result.subject?.code, percentage, band.grade, band.points], widths, index);
       });
     }
 
@@ -350,10 +333,10 @@ router.get('/report-card/:studentId/:term/pdf', protect, authorize('admin', 'sup
     const totalPoints = isUace ? [...bySubject.values()].reduce((sum, list) => {
       const result = list.find(item => item.examType === 'EOT') || list[0];
       const percentage = result?.percentage ?? 0;
-      return sum + (percentage >= 80 ? 6 : percentage >= 70 ? 5 : percentage >= 60 ? 4 : percentage >= 50 ? 3 : percentage >= 40 ? 2 : 0);
+      return sum + gradeForPercentage(percentage, gradingScheme.gradeBands).points;
     }, 0) : null;
     doc.fillColor(primary).font('Helvetica-Bold').fontSize(10).text(isUace ? `TOTAL AGGREGATE POINTS: ${Math.min(totalPoints, 20)} / 20` : 'NCDC ASSESSMENT SUMMARY', 42, y + 18);
-    doc.fillColor('#334155').font('Helvetica').fontSize(8).text(isUace ? 'Principal marks are shown per subject. Grading follows the UACE A-F scale.' : 'Formative assessment contributes 20%; summative assessment contributes 80%.', 42, y + 34);
+    doc.fillColor('#334155').font('Helvetica').fontSize(8).text(isUace ? 'Principal marks are shown per subject using the configured grading scheme.' : `Configured assessment weights: BOT ${gradingScheme.assessmentWeights.BOT}%, MOT ${gradingScheme.assessmentWeights.MOT}%, EOT ${gradingScheme.assessmentWeights.EOT}%.`, 42, y + 34);
     doc.text('Class Teacher Comment: _________________________________________________', 42, y + 63);
     doc.text('Headteacher Comment: ___________________________________________________', 42, y + 82);
     doc.fillColor('#64748b').fontSize(7).text(`Generated ${new Date().toLocaleDateString('en-UG')} | Published results only | Ndugu Academy`, 42, doc.page.height - 42, { align: 'center', width: pageW });
@@ -383,8 +366,10 @@ router.get('/report-card/:studentId/:term/pdf', protect, authorize('admin', 'sup
       .populate('subject', 'name code')
       .sort({ 'subject.name': 1 });
 
-    const gradeMap = { D1: 1, D2: 2, C3: 3, C4: 4, C5: 5, C6: 6, P7: 7, P8: 8, F9: 9 };
-    const totalAggregates = grades.reduce((s, g) => s + (gradeMap[g.gradeValue] || 9), 0);
+    const gradingScheme = await getGradingScheme(student.currentClassLevel, Number(academicYear));
+    const gradeMap = Object.fromEntries(gradingScheme.gradeBands.map(band => [band.grade, band.points]));
+    const worstPoints = Math.max(...gradingScheme.gradeBands.map(band => band.points));
+    const totalAggregates = grades.reduce((s, g) => s + (gradeMap[g.gradeValue] ?? worstPoints), 0);
     const avgMarks = grades.length > 0 ? Math.round(grades.reduce((s, g) => s + g.totalMarks, 0) / grades.length) : 0;
 
     // Uganda division calculation (O-Level)

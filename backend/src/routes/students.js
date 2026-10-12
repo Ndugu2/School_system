@@ -9,6 +9,8 @@ const AcademicPerformance = require('../models/AcademicPerformance');
 const Teacher = require('../models/Teacher');
 const { protect, authorize } = require('../middleware/auth');
 const { logAudit } = require('../middleware/auditLog');
+const { MIN_ACCOUNT_PASSWORD_LENGTH, isAcceptableAccountPassword } = require('../utils/passwordPolicy');
+const { canAccessStudent, parentStudentFilter } = require('../middleware/recordAccess');
 const router = express.Router();
 
 // Helper to generate unique student registration number
@@ -49,6 +51,10 @@ router.post('/', protect, authorize('admin', 'super-admin', 'registrar'), async 
     allergies, medicalConditions, specialNeeds
   } = req.body;
 
+  if (!isAcceptableAccountPassword(password)) {
+    return res.status(400).json({ error: { message: `Set an account password of at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters` } });
+  }
+
   try {
     // Check if class exists
     const cls = await Class.findById(classId);
@@ -67,7 +73,7 @@ router.post('/', protect, authorize('admin', 'super-admin', 'registrar'), async 
     const user = await User.create({
       name,
       email: emailToUse,
-      password: password || 'student123', // Default password
+      password,
       role: 'student'
     });
 
@@ -85,6 +91,10 @@ router.post('/', protect, authorize('admin', 'super-admin', 'registrar'), async 
       parentPhone,
       parentEmail,
       parentRelationship: parentRelationship || 'Guardian',
+      guardians: req.body.guardians || [
+        ...(parentName ? [{ name: parentName, relationship: parentRelationship || 'Guardian', phone: parentPhone, email: parentEmail, isPrimary: true }] : []),
+        ...(secondaryContactName ? [{ name: secondaryContactName, phone: secondaryContactPhone, isPrimary: false }] : []),
+      ],
       parentOccupation,
       secondaryContactName,
       secondaryContactPhone,
@@ -124,9 +134,7 @@ router.get('/', protect, authorize('super-admin', 'admin', 'registrar', 'supervi
   let assignedClassIds = null;
 
   if (req.user.role === 'parent') {
-    // Older records may be linked by the verified parent email rather than parentUser.
-    // Both are safe identifiers of the signed-in parent, unlike exposing the full roster.
-    filter.$or = [{ parentUser: req.user._id }, { parentEmail: req.user.email }];
+    filter.$or = parentStudentFilter(req.user).$or;
   }
   if (req.user.role === 'student') {
     filter.user = req.user._id;
@@ -158,6 +166,9 @@ router.get('/', protect, authorize('super-admin', 'admin', 'registrar', 'supervi
 // @desc    Get alumni and graduated students directory
 // @access  Private
 router.get('/alumni/directory', protect, async (req, res) => {
+  if (!['super-admin', 'admin', 'headteacher', 'registrar'].includes(req.user.role)) {
+    return res.status(403).json({ error: { message: 'Not authorized to view the alumni directory' } });
+  }
   try {
     const alumni = await Student.find({ studentStatus: { $in: ['graduated', 'alumni'] } })
       .populate('user', 'name email')
@@ -181,7 +192,7 @@ router.get('/:id', protect, authorize('super-admin', 'admin', 'registrar', 'supe
     if (!student) {
       return res.status(404).json({ error: { message: 'Student profile not found' } });
     }
-    if (req.user.role === 'parent' && String(student.parentUser) !== String(req.user._id) && student.parentEmail !== req.user.email) {
+    if (req.user.role === 'parent' && !(await canAccessStudent(req.user, student._id))) {
       return res.status(403).json({ error: { message: 'Not authorized to view this student' } });
     }
     if (req.user.role === 'student' && String(student.user?._id || student.user) !== String(req.user._id)) {
@@ -205,7 +216,7 @@ router.get('/:id', protect, authorize('super-admin', 'admin', 'registrar', 'supe
 router.put('/:id', protect, authorize('admin', 'super-admin', 'registrar'), async (req, res) => {
   const { 
     name, dob, gender, classId,
-    parentName, parentPhone, parentEmail, address 
+    parentName, parentPhone, parentEmail, parentRelationship, address, guardians
   } = req.body;
 
   try {
@@ -233,6 +244,25 @@ router.put('/:id', protect, authorize('admin', 'super-admin', 'registrar'), asyn
     student.parentName = parentName || student.parentName;
     student.parentPhone = parentPhone || student.parentPhone;
     student.parentEmail = parentEmail || student.parentEmail;
+    if (parentRelationship) student.parentRelationship = parentRelationship;
+    if (Array.isArray(guardians)) student.guardians = guardians;
+    else if (parentName || parentPhone || parentEmail || parentRelationship) {
+      const primaryGuardian = student.guardians.find(guardian => guardian.isPrimary);
+      if (primaryGuardian) {
+        primaryGuardian.name = parentName || primaryGuardian.name;
+        primaryGuardian.phone = parentPhone || primaryGuardian.phone;
+        primaryGuardian.email = parentEmail || primaryGuardian.email;
+        primaryGuardian.relationship = parentRelationship || primaryGuardian.relationship;
+      } else {
+        student.guardians.push({
+          name: parentName || student.parentName,
+          phone: parentPhone || student.parentPhone,
+          email: parentEmail || student.parentEmail,
+          relationship: parentRelationship || student.parentRelationship,
+          isPrimary: true,
+        });
+      }
+    }
     student.address = address || student.address;
 
     await student.save();
@@ -273,12 +303,12 @@ router.delete('/:id', protect, authorize('admin', 'super-admin'), async (req, re
 // @route   GET /api/students/filter/advanced
 // @desc    Get students with advanced filters (gender, enrollment date, performance)
 // @access  Private
-router.get('/filter/advanced', protect, async (req, res) => {
+router.get('/filter/advanced', protect, authorize('super-admin', 'admin', 'headteacher', 'registrar'), async (req, res) => {
   const { gender, enrollmentStartDate, enrollmentEndDate, performanceLevel, classId } = req.query;
   const filter = {};
 
   if (gender) filter.gender = gender;
-  if (classId) filter.class = classId;
+  if (classId) filter.currentClass = classId;
   if (enrollmentStartDate || enrollmentEndDate) {
     filter.enrollmentDate = {};
     if (enrollmentStartDate) filter.enrollmentDate.$gte = new Date(enrollmentStartDate);
@@ -288,7 +318,7 @@ router.get('/filter/advanced', protect, async (req, res) => {
   try {
     let students = await Student.find(filter)
       .populate('user', '-password')
-      .populate('class');
+      .populate('currentClass');
 
     // Filter by performance if specified
     if (performanceLevel) {
@@ -368,21 +398,26 @@ router.put('/bulk/class', protect, authorize('admin', 'super-admin'), async (req
 // @route   GET /api/students/export/csv
 // @desc    Export students list as CSV
 // @access  Private
-router.get('/export/csv', protect, async (req, res) => {
+router.get('/export/csv', protect, authorize('super-admin', 'admin', 'headteacher', 'registrar'), async (req, res) => {
   const { classId } = req.query;
 
   try {
-    const filter = classId ? { class: classId } : {};
+    const filter = classId ? { currentClass: classId } : {};
     const students = await Student.find(filter)
       .populate('user', 'name email')
-      .populate('class', 'name');
+      .populate('currentClass', 'name');
 
     let csv = 'Student ID,Full Name,Email,Class,Gender,Date of Birth,Parent Name,Parent Phone,Enrollment Date\n';
     
+    const csvCell = value => {
+      let cell = String(value ?? '');
+      if (/^[\u0000-\u0020]*[=+@-]/.test(cell)) cell = `'${cell}`;
+      return `"${cell.replace(/"/g, '""')}"`;
+    };
     students.forEach(student => {
       const dob = student.dob ? new Date(student.dob).toLocaleDateString() : '';
       const enrollDate = student.enrollmentDate ? new Date(student.enrollmentDate).toLocaleDateString() : '';
-      csv += `"${student.studentId}","${student.user?.name || ''}","${student.user?.email || ''}","${student.class?.name || ''}","${student.gender}","${dob}","${student.parentName}","${student.parentPhone}","${enrollDate}"\n`;
+      csv += [student.studentId, student.user?.name, student.user?.email, student.currentClass?.name, student.gender, dob, student.parentName, student.parentPhone, enrollDate].map(csvCell).join(',') + '\n';
     });
 
     res.setHeader('Content-Type', 'text/csv');
@@ -410,11 +445,16 @@ router.post('/import/csv', protect, authorize('admin', 'super-admin'), async (re
 
     for (const studentData of csvData) {
       try {
-        const { name, email, classId, dob, gender, parentName, parentPhone, parentEmail, address } = studentData;
+        const { name, email, password, classId, dob, gender, parentName, parentPhone, parentEmail, address } = studentData;
 
         if (!name || !classId || !gender || !parentName || !parentPhone) {
           results.failed++;
           results.errors.push({ name, reason: 'Missing required fields' });
+          continue;
+        }
+        if (!isAcceptableAccountPassword(password)) {
+          results.failed++;
+          results.errors.push({ name, reason: `Password must be at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters` });
           continue;
         }
 
@@ -436,7 +476,7 @@ router.post('/import/csv', protect, authorize('admin', 'super-admin'), async (re
         const user = await User.create({
           name,
           email: emailToUse,
-          password: 'student123',
+          password,
           role: 'student'
         });
 
@@ -476,6 +516,7 @@ router.post('/import/csv', protect, authorize('admin', 'super-admin'), async (re
 // @access  Private
 router.get('/:studentId/health', protect, async (req, res) => {
   try {
+    if (!(await canAccessStudent(req.user, req.params.studentId))) return res.status(403).json({ error: { message: 'Not authorized to view this health record' } });
     const healthRecord = await HealthRecord.findOne({ student: req.params.studentId });
     if (!healthRecord) {
       return res.status(404).json({ error: { message: 'No health records found' } });
@@ -518,6 +559,7 @@ router.post('/:studentId/health', protect, authorize('admin', 'super-admin'), as
 // @access  Private
 router.get('/:studentId/emergency-contacts', protect, async (req, res) => {
   try {
+    if (!(await canAccessStudent(req.user, req.params.studentId))) return res.status(403).json({ error: { message: 'Not authorized to view these contacts' } });
     const contacts = await EmergencyContact.find({ student: req.params.studentId });
     res.status(200).json(contacts);
   } catch (error) {
@@ -578,6 +620,7 @@ router.delete('/:studentId/emergency-contacts/:contactId', protect, authorize('a
 // @access  Private
 router.get('/:studentId/photos', protect, async (req, res) => {
   try {
+    if (!(await canAccessStudent(req.user, req.params.studentId))) return res.status(403).json({ error: { message: 'Not authorized to view these photos' } });
     const photos = await StudentPhoto.find({ student: req.params.studentId });
     res.status(200).json(photos);
   } catch (error) {
@@ -655,6 +698,7 @@ router.delete('/:studentId/photos/:photoId', protect, authorize('admin', 'super-
 // @access  Private
 router.get('/:studentId/performance', protect, async (req, res) => {
   try {
+    if (!(await canAccessStudent(req.user, req.params.studentId))) return res.status(403).json({ error: { message: 'Not authorized to view this performance record' } });
     const performance = await AcademicPerformance.findOne({ student: req.params.studentId })
       .populate('class')
       .populate('subjects.subject');

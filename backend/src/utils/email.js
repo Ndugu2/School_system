@@ -5,15 +5,17 @@
 const nodemailer = require('nodemailer');
 
 // Create transporter once; reuse for all sends.
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const createTransporter = () => {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    throw new Error('SMTP_HOST, SMTP_USER, and SMTP_PASS are required to send email');
+  }
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
+};
 
 /**
  * Send an email.
@@ -23,8 +25,9 @@ const transporter = nodemailer.createTransport({
  * @returns {Promise} resolves when email is sent.
  */
 function sendMail(to, subject, html) {
+  const transporter = createTransporter();
   const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+    from: process.env.EMAIL_FROM || process.env.ALERT_FROM || process.env.SMTP_USER,
     to,
     subject,
     html,

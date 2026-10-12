@@ -4,6 +4,9 @@ const Room = require('../models/Room');
 const Event = require('../models/Event');
 const ScheduleEntry = require('../models/ScheduleEntry');
 const { protect, authorize } = require('../../../middleware/auth');
+const Student = require('../../../models/Student');
+const { canAccessStudent, parentStudentFilter } = require('../../../middleware/recordAccess');
+const { timeToMinutes, hasTimeOverlap } = require('../../../utils/scheduleConflicts');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ROOMS
@@ -56,27 +59,37 @@ router.get('/schedule', protect, async (req, res) => {
 
 // @route POST /api/operations/schedule — with conflict detection
 router.post('/schedule', protect, authorize('super-admin', 'admin'), async (req, res) => {
-  const { class: classId, teacher, room, dayOfWeek, period, term, academicYear } = req.body;
+  const { class: classId, teacher, room, dayOfWeek, period, startTime, endTime, term, academicYear } = req.body;
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  if (start === null || end === null || start >= end) {
+    return res.status(400).json({ error: { message: 'Schedule times must be valid 24-hour HH:mm values and end after start' } });
+  }
   try {
     const year = academicYear || new Date().getFullYear();
     const conflicts = [];
+    const resourceQueries = [{ class: classId }];
+    if (teacher) resourceQueries.push({ teacher });
+    if (room) resourceQueries.push({ room });
+    const existingEntries = await ScheduleEntry.find({
+      dayOfWeek,
+      term,
+      academicYear: year,
+      isActive: true,
+      $or: resourceQueries,
+    });
 
-    // Check teacher conflict
-    if (teacher) {
-      const teacherConflict = await ScheduleEntry.findOne({ teacher, dayOfWeek, period, term, academicYear: year, isActive: true });
-      if (teacherConflict) conflicts.push({ type: 'teacher', message: `Teacher is already scheduled in Period ${period} on Day ${dayOfWeek}` });
-    }
-
-    // Check room conflict
-    if (room) {
-      const roomConflict = await ScheduleEntry.findOne({ room, dayOfWeek, period, term, academicYear: year, isActive: true });
-      if (roomConflict) conflicts.push({ type: 'room', message: `Room is already booked in Period ${period} on Day ${dayOfWeek}` });
-    }
-
-    // Check class conflict
-    if (classId) {
-      const classConflict = await ScheduleEntry.findOne({ class: classId, dayOfWeek, period, term, academicYear: year, isActive: true });
-      if (classConflict) conflicts.push({ type: 'class', message: `Class already has a lesson scheduled in Period ${period} on Day ${dayOfWeek}` });
+    for (const existing of existingEntries) {
+      if (!hasTimeOverlap(startTime, endTime, existing.startTime, existing.endTime)) continue;
+      if (String(existing.class) === String(classId)) {
+        conflicts.push({ type: 'class', message: `Class is already scheduled from ${existing.startTime} to ${existing.endTime}` });
+      }
+      if (teacher && String(existing.teacher) === String(teacher)) {
+        conflicts.push({ type: 'teacher', message: `Teacher is already scheduled from ${existing.startTime} to ${existing.endTime}` });
+      }
+      if (room && String(existing.room) === String(room)) {
+        conflicts.push({ type: 'room', message: `Room is already booked from ${existing.startTime} to ${existing.endTime}` });
+      }
     }
 
     if (conflicts.length > 0) {
@@ -109,15 +122,31 @@ router.get('/events', protect, async (req, res) => {
   try {
     const { type, status, academicYear, upcoming } = req.query;
     const query = {};
+    if (['parent', 'student'].includes(req.user.role)) query.status = 'published';
     if (type) query.type = type;
-    if (status) query.status = status;
+    if (status && !['parent', 'student'].includes(req.user.role)) query.status = status;
     if (academicYear) query.academicYear = parseInt(academicYear);
     if (upcoming === 'true') query.startDate = { $gte: new Date() };
 
     const events = await Event.find(query)
       .populate('organizer', 'name')
       .sort({ startDate: 1 });
-    res.json(events);
+    if (['super-admin', 'admin'].includes(req.user.role)) return res.json(events);
+    let visibleStudentIds = [];
+    if (req.user.role === 'parent') {
+      const children = await Student.find(parentStudentFilter(req.user)).select('_id');
+      visibleStudentIds = children.map(student => String(student._id));
+    } else if (req.user.role === 'student') {
+      const student = await Student.findOne({ user: req.user._id }).select('_id');
+      if (student) visibleStudentIds = [String(student._id)];
+    }
+    res.json(events.map(event => {
+      const visible = event.toObject();
+      visible.permissionSlips = visibleStudentIds.length
+        ? (visible.permissionSlips || []).filter(slip => visibleStudentIds.includes(String(slip.studentId)))
+        : [];
+      return visible;
+    }));
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
   }
@@ -126,8 +155,13 @@ router.get('/events', protect, async (req, res) => {
 // @route POST /api/operations/events
 router.post('/events', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
   try {
+    const eventData = { ...req.body };
+    delete eventData.permissionSlips;
+    delete eventData.organizer;
+    delete eventData.organizerName;
     const event = await Event.create({
-      ...req.body,
+      ...eventData,
+      permissionSlips: [],
       organizer: req.user._id,
       organizerName: req.user.name,
     });
@@ -140,8 +174,16 @@ router.post('/events', protect, authorize('super-admin', 'admin', 'teacher'), as
 // @route PUT /api/operations/events/:id
 router.put('/events/:id', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
   try {
-    const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!event) return res.status(404).json({ error: { message: 'Event not found' } });
+    const existing = await Event.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: { message: 'Event not found' } });
+    if (!['super-admin', 'admin'].includes(req.user.role) && String(existing.organizer) !== String(req.user._id)) {
+      return res.status(403).json({ error: { message: 'Teachers may only update events they created' } });
+    }
+    const updates = { ...req.body };
+    delete updates.permissionSlips;
+    delete updates.organizer;
+    delete updates.organizerName;
+    const event = await Event.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
     res.json(event);
   } catch (err) {
     res.status(400).json({ error: { message: err.message } });
@@ -149,17 +191,21 @@ router.put('/events/:id', protect, authorize('super-admin', 'admin', 'teacher'),
 });
 
 // @route POST /api/operations/events/:id/permission-slip — parent signs
-router.post('/events/:id/permission-slip', protect, async (req, res) => {
-  const { studentId, studentName, action } = req.body; // action: 'sign' | 'decline'
+router.post('/events/:id/permission-slip', protect, authorize('parent'), async (req, res) => {
+  const { studentId, action } = req.body; // action: 'sign' | 'decline'
   try {
+    if (!studentId || !['sign', 'decline'].includes(action)) return res.status(400).json({ error: { message: 'A student and valid sign/decline action are required' } });
+    if (!(await canAccessStudent(req.user, studentId))) return res.status(403).json({ error: { message: 'Not authorized to respond for this student' } });
+    const student = await Student.findById(studentId).populate('user', 'name');
+    if (!student) return res.status(404).json({ error: { message: 'Student not found' } });
     const event = await Event.findById(req.params.id);
     if (!event) return res.status(404).json({ error: { message: 'Event not found' } });
     if (!event.requiresPermissionSlip) return res.status(400).json({ error: { message: 'This event does not require a permission slip' } });
 
-    const existingIdx = event.permissionSlips.findIndex(p => p.studentId === studentId);
+    const existingIdx = event.permissionSlips.findIndex(p => String(p.studentId) === String(studentId));
     const slip = {
-      studentId,
-      studentName,
+      studentId: String(student._id),
+      studentName: student.user?.name || '',
       parentName: req.user.name,
       signedAt: new Date(),
       status: action === 'sign' ? 'signed' : 'declined',
@@ -173,7 +219,7 @@ router.post('/events/:id/permission-slip', protect, async (req, res) => {
     event.markModified('permissionSlips');
     await event.save();
 
-    res.json({ message: `Permission slip ${action === 'sign' ? 'signed' : 'declined'} successfully`, event });
+    res.json({ message: `Permission slip ${action === 'sign' ? 'signed' : 'declined'} successfully`, status: slip.status });
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
   }

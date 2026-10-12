@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 
 const CHILDREN = [
   { id: '1', name: 'Mukasa Ronald', class: 'Senior 3 East', lin: 'LIN-99201', balance: 450000, attendance: '96.5%', division: 'Division I (18 Aggs)' },
@@ -20,25 +20,6 @@ const REPORT_CARD_MUKASA = [
 export default function ParentPortal() {
   const [selectedChild, setSelectedChild] = useState(CHILDREN[0]);
   const [activeTab, setActiveTab] = useState<'finance' | 'academics' | 'exeat'>('finance');
-
-  const handlePayMobileMoney = (network: 'MTN' | 'Airtel') => {
-    Alert.alert(
-      `${network} Mobile Money`,
-      `Prompt sent to registered phone number for UGX ${selectedChild.balance.toLocaleString()}. Enter your PIN to complete fees payment.`,
-      [{ text: 'OK' }]
-    );
-  };
-
-  const handleApproveExeat = () => {
-    Alert.alert(
-      'Approve Gate Pass',
-      'Enter the 4-digit SMS OTP received on your phone to authorize Ronald Mukasa departure for Jinja.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm OTP (8492)', onPress: () => Alert.alert('Authorized', 'Gate Pass Approved. Warden notified.') }
-      ]
-    );
-  };
 
   return (
     <View style={styles.container}>
@@ -74,6 +55,10 @@ export default function ParentPortal() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.demoNotice}>
+          <Text style={styles.demoNoticeText}>Sample data only. This preview does not use live student records or process payments and gate-pass approvals.</Text>
+        </View>
+
         {/* Child Summary Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
@@ -99,14 +84,7 @@ export default function ParentPortal() {
               </Text>
 
               {selectedChild.balance > 0 && (
-                <View style={styles.payButtonsRow}>
-                  <TouchableOpacity style={[styles.momoBtn, { backgroundColor: '#facc15' }]} onPress={() => handlePayMobileMoney('MTN')}>
-                    <Text style={[styles.momoBtnText, { color: '#000000' }]}>MTN MoMo Pay</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.momoBtn, { backgroundColor: '#dc2626' }]} onPress={() => handlePayMobileMoney('Airtel')}>
-                    <Text style={[styles.momoBtnText, { color: '#ffffff' }]}>Airtel Money</Text>
-                  </TouchableOpacity>
-                </View>
+                <Text style={styles.demoNoticeText}>Mobile payments are not enabled in this preview. Use the authenticated web Parent Portal for MTN MoMo.</Text>
               )}
             </View>
 
@@ -162,11 +140,7 @@ export default function ParentPortal() {
               <Text style={styles.exeatTitle}>Boarding Leave Pass Pending Approval</Text>
               <Text style={styles.exeatMeta}>Destination: Jinja (Family Funeral)</Text>
               <Text style={styles.exeatMeta}>Departure: 2026-06-12 08:30 • Expected Return: 2026-06-14 17:00</Text>
-              <Text style={styles.exeatOtp}>Generated OTP: 8492</Text>
-
-              <TouchableOpacity style={styles.approveExeatBtn} onPress={handleApproveExeat}>
-                <Text style={styles.approveExeatBtnText}>Authorize Gate Pass with OTP</Text>
-              </TouchableOpacity>
+              <Text style={styles.demoNoticeText}>Gate-pass approvals are not connected in this preview.</Text>
             </View>
           </View>
         )}
@@ -178,6 +152,8 @@ export default function ParentPortal() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b0f19' },
   scrollContent: { padding: 16, paddingBottom: 40 },
+  demoNotice: { backgroundColor: '#78350f', borderRadius: 8, padding: 10, marginBottom: 12 },
+  demoNoticeText: { color: '#fde68a', fontSize: 12, lineHeight: 18 },
   childBar: { paddingHorizontal: 16, paddingTop: 12 },
   childBarLabel: { color: '#94a3b8', fontSize: 12, fontWeight: '600', marginBottom: 6 },
   childPills: { flexDirection: 'row', gap: 8 },
@@ -201,9 +177,6 @@ const styles = StyleSheet.create({
   balanceTitle: { color: '#94a3b8', fontSize: 12, fontWeight: '600' },
   balanceAmount: { fontSize: 28, fontWeight: '800', marginVertical: 6 },
   balanceStatus: { color: '#cbd5e1', fontSize: 12, marginBottom: 14 },
-  payButtonsRow: { flexDirection: 'row', gap: 10 },
-  momoBtn: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  momoBtnText: { fontWeight: '800', fontSize: 13 },
   sectionTitle: { color: '#ffffff', fontSize: 15, fontWeight: '700', marginBottom: 8 },
   receiptCard: { backgroundColor: '#131927', borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#1e293b' },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -222,7 +195,4 @@ const styles = StyleSheet.create({
   exeatCard: { backgroundColor: '#131927', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#1e293b' },
   exeatTitle: { color: '#ffffff', fontSize: 15, fontWeight: '700', marginBottom: 6 },
   exeatMeta: { color: '#94a3b8', fontSize: 13, marginTop: 2 },
-  exeatOtp: { color: '#fbbf24', fontSize: 16, fontWeight: '800', marginVertical: 10 },
-  approveExeatBtn: { backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  approveExeatBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '700' }
 });

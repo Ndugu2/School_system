@@ -79,24 +79,24 @@ export default function AcademicYearsTab({
       label: newYearForm.label.trim() || `${newYearForm.year} Academic Year`,
       notes: newYearForm.notes.trim(),
       terms: [
-        { 
-          name: 'Term I', 
-          isActive: true, 
-          isCurrent: true, 
+        {
+          name: 'Term 1',
+          isActive: true,
+          isCurrent: true,
           startDate: newYearForm.term1Start ? new Date(newYearForm.term1Start) : undefined,
           endDate: newYearForm.term1End ? new Date(newYearForm.term1End) : undefined
         },
-        { 
-          name: 'Term II', 
-          isActive: false, 
-          isCurrent: false, 
+        {
+          name: 'Term 2',
+          isActive: false,
+          isCurrent: false,
           startDate: newYearForm.term2Start ? new Date(newYearForm.term2Start) : undefined,
           endDate: newYearForm.term2End ? new Date(newYearForm.term2End) : undefined
         },
-        { 
-          name: 'Term III', 
-          isActive: false, 
-          isCurrent: false, 
+        {
+          name: 'Term 3',
+          isActive: false,
+          isCurrent: false,
           startDate: newYearForm.term3Start ? new Date(newYearForm.term3Start) : undefined,
           endDate: newYearForm.term3End ? new Date(newYearForm.term3End) : undefined
         }
@@ -105,7 +105,7 @@ export default function AcademicYearsTab({
 
     try {
       await api.post('/academic-years', payload);
-      showAlert(`Academic Year ${newYearForm.year} configured with Term I, II & III!`);
+      showAlert(`Academic Year ${newYearForm.year} configured with Term 1, 2 & 3!`);
       setShowAddYearModal(false);
       setNewYearForm({
         year: new Date().getFullYear() + 1,

@@ -111,8 +111,8 @@ The system is organized into 4 primary pillars:
    * Configurable fee structures per class level (S1 to S6).
    * Automated batch invoice generation per term in UGX.
 2. **Payment Integrations & Webhooks**:
-   * Direct API endpoints for MTN Mobile Money, Airtel Money, SchoolPay, Pegasus PayWay, and Centenary Bank webhooks for real-time ledger clearing.
-   * Instant SMS/WhatsApp receipt generation.
+   * MTN MoMo Collections requests with provider-side status verification before invoice, receipt, and journal updates. Airtel Money, SchoolPay, Pegasus PayWay, and Centenary Bank integrations are not currently included.
+   * SMS delivery through Africa's Talking and email delivery when provider credentials are configured. Sandbox SMS is explicitly not delivered.
 3. **Bursary & Scholarship Tracking**:
    * Partial/Full bursaries (Sports, Academic, Director's Bursary, NGO/State sponsorships).
 4. **Expense Tracker & Financial Analytics**:
@@ -143,9 +143,15 @@ The system enforces strict permission scoping across 5 primary roles:
 | **Admin / Bursar** | Student admissions, finance ledger, invoice management, payroll, & report generation. |
 | **Teacher** | Class mark entry (BOT/MOT/EOT/SBA), attendance roll call, & course material upload. |
 | **Student** | Personal grade view, e-learning materials, fee balance summary, & library books. |
-| **Parent** | Student 360° progress view, fee payment via Mobile Money, attendance alerts, & exeat approvals. |
+| **Parent (web)** | Linked-student records, fee payment via MTN MoMo, attendance, and parent communications. |
 
 ---
+
+## Mobile application status
+
+The React Native application is a UI preview with hard-coded sample records and a role switcher, not a production-connected client. It has no authentication and does not submit attendance, marks, payments, SMS, or gate-pass approvals. Use the authenticated web application for production workflows. The mobile parent preview explicitly disables simulated payment and gate-pass actions.
+
+Notifications currently support in-app records and optional SMS/email delivery when configured. Mobile push notifications are not implemented.
 
 ## ⚙️ Installation & Development Guide
 

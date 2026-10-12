@@ -5,10 +5,11 @@ const Student = require('../models/Student');
 const Subject = require('../models/Subject');
 const { protect, authorize } = require('../middleware/auth');
 const { logAudit } = require('../middleware/auditLog');
-const { teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent, hasAssignedClass } = require('../middleware/recordAccess');
+const { teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent, hasAssignedClass, parentStudentFilter } = require('../middleware/recordAccess');
+const { gradeForPercentage, getGradingScheme } = require('../utils/grading');
 
 const ENTRY_ROLES = ['super-admin', 'admin', 'academic-admin', 'teacher', 'class-teacher'];
-const APPROVAL_ROLES = ['super-admin', 'admin', 'academic-admin', 'hod'];
+const APPROVAL_ROLES = ['super-admin', 'admin', 'academic-admin', 'director-of-studies', 'hod'];
 
 const validateTeacherAssignments = async (user, results) => {
   if (!['teacher', 'class-teacher'].includes(user.role)) return null;
@@ -33,26 +34,13 @@ const validateTeacherAssignments = async (user, results) => {
   return null;
 };
 
-// ─── Uganda Grading Helper ─────────────────────────────────────────────────────
-const getGrade = (percentage) => {
-  if (percentage >= 80) return { grade: 'D1', points: 1 };
-  if (percentage >= 70) return { grade: 'D2', points: 2 };
-  if (percentage >= 65) return { grade: 'C3', points: 3 };
-  if (percentage >= 60) return { grade: 'C4', points: 4 };
-  if (percentage >= 55) return { grade: 'C5', points: 5 };
-  if (percentage >= 50) return { grade: 'C6', points: 6 };
-  if (percentage >= 45) return { grade: 'P7', points: 7 };
-  if (percentage >= 40) return { grade: 'P8', points: 8 };
-  return { grade: 'F9', points: 9 };
-};
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET RESULTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // @desc  Get results with filters
 // @route GET /api/exam-results
-router.get('/', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
+router.get('/', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 'deputy-head', 'academic-admin', 'director-of-studies', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
   try {
     const { student, class: classId, subject, term, academicYear, examType, approvalStatus, page = 1, limit = 100 } = req.query;
 
@@ -70,7 +58,7 @@ router.get('/', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 
       query.approvalStatus = 'published';
     }
     if (req.user.role === 'parent') {
-      const children = await Student.find({ $or: [{ parentUser: req.user._id }, { parentEmail: req.user.email }] }, '_id');
+      const children = await Student.find(parentStudentFilter(req.user), '_id');
       const childIds = children.map(child => child._id);
       query.student = student ? { $in: childIds.filter(id => String(id) === String(student)) } : { $in: childIds };
     }
@@ -116,7 +104,7 @@ router.get('/', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 
 
 // @desc  Get full report card data for a student for a term
 // @route GET /api/exam-results/report-card/:studentId
-router.get('/report-card/:studentId', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
+router.get('/report-card/:studentId', protect, authorize('admin', 'super-admin', 'hod', 'supervisor', 'deputy-head', 'academic-admin', 'director-of-studies', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
   try {
     const { term, academicYear } = req.query;
     if (!term || !academicYear) return res.status(400).json({ error: { message: 'term and academicYear are required' } });
@@ -124,9 +112,6 @@ router.get('/report-card/:studentId', protect, authorize('admin', 'super-admin',
     const student = await Student.findById(req.params.studentId)
       .populate('user', 'name');
     if (!student) return res.status(404).json({ error: { message: 'Student not found' } });
-    if (req.user.role === 'parent' && String(student.parentUser) !== String(req.user._id) && student.parentEmail !== req.user.email) {
-      return res.status(403).json({ error: { message: 'Not authorized to view this report card' } });
-    }
     if (req.user.role === 'student' && String(student.user?._id || student.user) !== String(req.user._id)) {
       return res.status(403).json({ error: { message: 'Not authorized to view this report card' } });
     }
@@ -153,6 +138,8 @@ router.get('/report-card/:studentId', protect, authorize('admin', 'super-admin',
     const totalMax = results.reduce((s, r) => s + r.maxMarks, 0);
     const averagePercentage = results.length > 0 ? Math.round(totalMarks / totalMax * 100) : 0;
     const totalPoints = results.reduce((s, r) => s + (r.gradePoints || 0), 0);
+    const gradingScheme = await getGradingScheme(student.currentClassLevel, Number(academicYear));
+    const aggregateBand = gradeForPercentage(averagePercentage, gradingScheme.gradeBands);
 
     // Class position (rank among published results in same class/term)
     let classPosition = null;
@@ -191,7 +178,7 @@ router.get('/report-card/:studentId', protect, authorize('admin', 'super-admin',
         totalMax,
         averagePercentage,
         totalGradePoints: totalPoints,
-        aggregateGrade: getGrade(averagePercentage),
+        aggregateGrade: { grade: aggregateBand.grade, points: aggregateBand.points },
         classPosition
       }
     });
@@ -400,7 +387,13 @@ router.patch('/return-revision', protect, authorize(...APPROVAL_ROLES), async (r
       }
       filter.subject = subject || { $in: scope.subjectIds };
     }
+    const returned = await ExamResult.find(filter).select('_id approvalStatus').lean();
     const result = await ExamResult.updateMany(filter, { $set: { approvalStatus: 'draft' } });
+    for (const item of returned) await logAudit(req, {
+      action: 'result.returned', module: 'results', recordId: item._id,
+      oldValue: { approvalStatus: item.approvalStatus }, newValue: { approvalStatus: 'draft' },
+      description: 'Result returned to the teacher for revision',
+    });
     res.json({ message: `${result.modifiedCount} results returned for revision`, modifiedCount: result.modifiedCount });
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
@@ -409,7 +402,7 @@ router.patch('/return-revision', protect, authorize(...APPROVAL_ROLES), async (r
 
 // @desc  Admin publishes results (makes visible to students/parents)
 // @route PATCH /api/exam-results/publish
-router.patch('/publish', protect, authorize('super-admin', 'admin', 'academic-admin'), async (req, res) => {
+router.patch('/publish', protect, authorize('super-admin', 'admin', 'academic-admin', 'director-of-studies'), async (req, res) => {
   const { class: classId, subject, term, academicYear } = req.body;
 
   const filter = { term, academicYear: parseInt(academicYear), approvalStatus: 'hod-approved' };
@@ -589,4 +582,3 @@ router.get('/eligibility/:classId/:term', protect, authorize('super-admin', 'adm
 });
 
 module.exports = router;
-

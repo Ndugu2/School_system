@@ -6,19 +6,9 @@ const AcademicYear = require('../models/AcademicYear');
 const Class = require('../models/Class');
 const { protect, authorize } = require('../middleware/auth');
 const { logAudit } = require('../middleware/auditLog');
+const { generateRegistrationNumber } = require('../utils/registrationNumber');
 
 const ADMIN_ROLES = ['super-admin', 'admin', 'registrar'];
-
-// ── Registration Number Generator ─────────────────────────────────────────────
-const generateRegNumber = async (year, term) => {
-  const termCode = term === 'Term 1' ? 'T1' : term === 'Term 2' ? 'T2' : 'T3';
-  const prefix = `REG-${year}-${termCode}-`;
-  const last = await Registration.findOne({
-    registrationNumber: new RegExp('^' + prefix)
-  }).sort({ registrationNumber: -1 });
-  const seq = last ? parseInt(last.registrationNumber.split('-')[3]) + 1 : 1;
-  return `${prefix}${String(seq).padStart(4, '0')}`;
-};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET ALL REGISTRATIONS
@@ -128,7 +118,7 @@ router.post('/', protect, authorize(...ADMIN_ROLES), async (req, res) => {
       resolvedStreamName = stream.name;
     }
 
-    const registrationNumber = await generateRegNumber(academicYear.year, term);
+    const registrationNumber = await generateRegistrationNumber(academicYear.year, term);
 
     const registration = await Registration.create({
       student: studentId,

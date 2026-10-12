@@ -1,17 +1,221 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const Invoice = require('../models/Invoice');
 const Payroll = require('../models/Payroll');
 const Expense = require('../models/Expense');
 const JournalEntry = require('../models/JournalEntry');
+const PaymentReceipt = require('../../../models/PaymentReceipt');
+const MomoPayment = require('../models/MomoPayment');
 const FeeStructure = require('../../../models/FeeStructure');  // reuse existing
 const Student = require('../../../models/Student');
 const User = require('../../../models/User');
 const { protect, authorize } = require('../../../middleware/auth');
-const { canAccessStudent } = require('../../../middleware/recordAccess');
+const { canAccessStudent, parentStudentFilter } = require('../../../middleware/recordAccess');
+const { logAudit } = require('../../../middleware/auditLog');
+const { createCollectionRequest, getCollectionStatus } = require('../services/momoService');
 const FINANCE_VIEW_ROLES = ['super-admin', 'admin', 'headteacher', 'bursar'];
 const FINANCE_EDIT_ROLES = ['super-admin', 'admin', 'bursar'];
+
+const finalizeMomoPayment = async (momoPayment, providerStatus) => {
+  if (providerStatus.status !== 'SUCCESSFUL') {
+    const failed = providerStatus.status === 'FAILED';
+    if (failed) {
+      await MomoPayment.updateOne(
+        { _id: momoPayment._id, status: 'pending' },
+        { $set: { status: 'failed', failureReason: providerStatus.reason || 'MTN MoMo payment failed' } }
+      );
+    }
+    return { status: failed ? 'failed' : 'pending' };
+  }
+  if (providerStatus.externalId && providerStatus.externalId !== momoPayment.externalId) {
+    throw new Error('MTN MoMo status externalId did not match the payment request');
+  }
+  if (providerStatus.amount && Number(providerStatus.amount) !== momoPayment.amount) {
+    throw new Error('MTN MoMo status amount did not match the requested payment');
+  }
+  if (providerStatus.currency && providerStatus.currency !== momoPayment.currency) {
+    throw new Error('MTN MoMo status currency did not match the payment request');
+  }
+
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
+    const current = await MomoPayment.findById(momoPayment._id).session(session);
+    if (!current) throw new Error('MTN MoMo payment request was not found');
+    if (current.paymentReceipt) {
+      await session.commitTransaction();
+      return { status: 'successful', receiptId: current.paymentReceipt };
+    }
+    if (current.status !== 'pending') {
+      await session.commitTransaction();
+      return { status: current.status };
+    }
+
+    const invoice = await Invoice.findById(current.invoice).session(session);
+    if (!invoice) throw new Error('The invoice for this MTN MoMo payment no longer exists');
+    const updatedInvoice = await Invoice.findOneAndUpdate(
+      { _id: invoice._id, balance: { $gte: current.amount }, status: { $nin: ['paid', 'waived'] } },
+      [{
+        $set: {
+          paidAmount: { $add: [{ $ifNull: ['$paidAmount', 0] }, current.amount] },
+          balance: { $subtract: [{ $ifNull: ['$balance', 0] }, current.amount] },
+          status: {
+            $cond: [
+              { $lte: [{ $subtract: [{ $ifNull: ['$balance', 0] }, current.amount] }, 0] },
+              'paid',
+              'partial',
+            ],
+          },
+        },
+      }],
+      { new: true, session }
+    );
+    if (!updatedInvoice) throw new Error('Invoice balance changed; MTN payment requires finance reconciliation');
+
+    const transactionReference = providerStatus.financialTransactionId || current.referenceId;
+    const receiptNumber = `REC-MTN-${current.referenceId}`;
+    const [receipt] = await PaymentReceipt.create([{
+      receiptNumber,
+      invoice: invoice._id,
+      student: current.student,
+      studentId: invoice.studentId,
+      academicYear: invoice.academicYear,
+      term: invoice.term,
+      amount: current.amount,
+      paymentMethod: 'MTN Mobile Money',
+      transactionReference,
+      status: 'verified',
+      recordedBy: current.initiatedBy,
+      recordedByName: 'MTN MoMo',
+      verifiedByName: 'MTN MoMo',
+      verifiedAt: new Date(),
+    }], { session });
+    await JournalEntry.create([{
+      entryNumber: await generateJournalEntryNumber(),
+      date: new Date(),
+      description: `MTN MoMo fee payment for ${invoice.invoiceNumber}`,
+      reference: transactionReference,
+      academicYear: invoice.academicYear,
+      lines: [
+        { accountCode: '1200', accountName: 'Mobile Money Clearing', accountType: 'Asset', debit: current.amount, credit: 0 },
+        { accountCode: '1100', accountName: 'Student Fees Receivable', accountType: 'Asset', debit: 0, credit: current.amount },
+      ],
+      createdBy: current.initiatedBy,
+    }], { session });
+    await MomoPayment.updateOne(
+      { _id: current._id, status: 'pending' },
+      {
+        $set: {
+          status: 'successful',
+          providerTransactionId: transactionReference,
+          paymentReceipt: receipt._id,
+          completedAt: new Date(),
+        },
+      },
+      { session }
+    );
+    await session.commitTransaction();
+    return { status: 'successful', receiptId: receipt._id, invoice: updatedInvoice };
+  } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
+    throw err;
+  } finally {
+    await session.endSession();
+  }
+};
+
+router.post('/momo/request', protect, authorize('parent', 'student', ...FINANCE_EDIT_ROLES), async (req, res) => {
+  const { invoiceId, phoneNumber } = req.body;
+  const amount = Number(req.body.amount);
+  if (!invoiceId || !Number.isSafeInteger(amount) || amount <= 0 ||
+      typeof phoneNumber !== 'string' || !/^(\+?256|0)7\d{8}$/.test(phoneNumber.trim())) {
+    return res.status(400).json({ error: { message: 'Invoice, positive whole UGX amount, and valid Ugandan mobile number are required' } });
+  }
+  const callbackUrl = process.env.MTN_MOMO_CALLBACK_URL;
+  if (!callbackUrl) return res.status(503).json({ error: { message: 'MTN MoMo callback URL is not configured' } });
+  try {
+    if (new URL(callbackUrl).protocol !== 'https:') throw new Error();
+  } catch {
+    return res.status(503).json({ error: { message: 'MTN_MOMO_CALLBACK_URL must be a valid HTTPS URL' } });
+  }
+  try {
+    const invoice = await Invoice.findById(invoiceId);
+    if (!invoice) return res.status(404).json({ error: { message: 'Invoice not found' } });
+    if (!FINANCE_EDIT_ROLES.includes(req.user.role) && !(await canAccessStudent(req.user, invoice.student))) {
+      return res.status(403).json({ error: { message: 'Not authorized to pay this invoice' } });
+    }
+    if (invoice.status === 'paid' || invoice.status === 'waived' || amount > invoice.balance) {
+      return res.status(400).json({ error: { message: 'Payment amount exceeds the current payable invoice balance' } });
+    }
+
+    const normalizedPhone = phoneNumber.trim().replace(/^\+/, '').replace(/^0/, '256');
+    const referenceId = crypto.randomUUID();
+    const externalId = crypto.randomUUID();
+    const currency = process.env.MTN_MOMO_CURRENCY || 'UGX';
+    const pending = await MomoPayment.create({
+      invoice: invoice._id,
+      student: invoice.student,
+      initiatedBy: req.user._id,
+      referenceId,
+      externalId,
+      amount,
+      currency,
+      phoneNumber: normalizedPhone,
+    });
+    try {
+      await createCollectionRequest({ referenceId, externalId, amount, phoneNumber: normalizedPhone, callbackUrl });
+    } catch (err) {
+      await MomoPayment.updateOne(
+        { _id: pending._id, status: 'pending' },
+        { $set: { status: 'failed', failureReason: err.message } }
+      );
+      throw err;
+    }
+    res.status(202).json({
+      message: 'Payment request sent to the MTN MoMo customer prompt; awaiting provider confirmation',
+      payment: pending,
+    });
+  } catch (err) {
+    res.status(502).json({ error: { message: err.message } });
+  }
+});
+
+router.get('/momo/requests/:id', protect, async (req, res) => {
+  try {
+    const payment = await MomoPayment.findById(req.params.id).populate('invoice', 'invoiceNumber term academicYear');
+    if (!payment) return res.status(404).json({ error: { message: 'MTN MoMo request not found' } });
+    if (!FINANCE_VIEW_ROLES.includes(req.user.role) && !(await canAccessStudent(req.user, payment.student))) {
+      return res.status(403).json({ error: { message: 'Not authorized to view this MTN MoMo payment' } });
+    }
+    if (payment.status === 'pending') {
+      const providerStatus = await getCollectionStatus(payment.referenceId);
+      await finalizeMomoPayment(payment, providerStatus);
+      await payment.populate('paymentReceipt');
+    }
+    res.json(await MomoPayment.findById(payment._id).populate('paymentReceipt'));
+  } catch (err) {
+    res.status(502).json({ error: { message: err.message } });
+  }
+});
+
+router.post('/momo/callback', async (req, res) => {
+  const externalId = req.body?.externalId;
+  if (typeof externalId !== 'string' || !externalId) {
+    return res.status(400).json({ error: { message: 'MTN MoMo callback externalId is required' } });
+  }
+  try {
+    const payment = await MomoPayment.findOne({ externalId });
+    if (!payment) return res.status(404).json({ error: { message: 'MTN MoMo request not found' } });
+    if (payment.status !== 'pending') return res.json({ received: true, status: payment.status });
+    const providerStatus = await getCollectionStatus(payment.referenceId);
+    const result = await finalizeMomoPayment(payment, providerStatus);
+    res.json({ received: true, status: result.status });
+  } catch (err) {
+    res.status(502).json({ error: { message: err.message } });
+  }
+});
 
 // ── HELPER ───────────────────────────────────────────────────────────────────
 const generateInvoiceNumber = async () => {
@@ -233,7 +437,8 @@ router.get('/invoices/:id', protect, async (req, res) => {
 // @desc  Record payment against an invoice
 // @route POST /api/finance/invoices/:id/pay
 router.post('/invoices/:id/pay', protect, authorize(...FINANCE_EDIT_ROLES, 'parent'), async (req, res) => {
-  const { amount, method, transactionRef, remarks } = req.body;
+  const { amount, method, transactionRef } = req.body;
+  let session;
 
   try {
     const invoice = await Invoice.findById(req.params.id);
@@ -245,22 +450,35 @@ router.post('/invoices/:id/pay', protect, authorize(...FINANCE_EDIT_ROLES, 'pare
       return res.status(400).json({ error: { message: `Invoice is already ${invoice.status}` } });
     }
 
-    const payAmount = parseFloat(amount);
-    if (isNaN(payAmount) || payAmount <= 0) {
-      return res.status(400).json({ error: { message: 'Invalid payment amount' } });
-    }
+    const payAmount = Number(amount);
+    const paymentMethods = ['MTN Mobile Money', 'Airtel Money', 'Bank Deposit', 'Cash', 'Card'];
+    if (!Number.isSafeInteger(payAmount) || payAmount <= 0) return res.status(400).json({ error: { message: 'Payment amount must be a positive whole number of UGX' } });
+    if (!paymentMethods.includes(method)) return res.status(400).json({ error: { message: 'Select a valid payment method' } });
     if (payAmount > invoice.balance) {
       return res.status(400).json({ error: { message: `Amount exceeds balance of UGX ${invoice.balance.toLocaleString()}` } });
     }
 
-    invoice.paidAmount += payAmount;
-    // Status auto-updated by pre-save hook
-    await invoice.save();
+    const oldValue = { paidAmount: invoice.paidAmount, balance: invoice.balance, status: invoice.status };
+    session = await mongoose.startSession();
+    session.startTransaction();
+    const updatedInvoice = await Invoice.findOneAndUpdate(
+      { _id: invoice._id, status: { $nin: ['paid', 'waived'] }, balance: { $gte: payAmount } },
+      [{ $set: {
+        paidAmount: { $add: [{ $ifNull: ['$paidAmount', 0] }, payAmount] },
+        balance: { $subtract: [{ $ifNull: ['$balance', 0] }, payAmount] },
+        status: { $cond: [{ $lte: [{ $subtract: [{ $ifNull: ['$balance', 0] }, payAmount] }, 0] }, 'paid', 'partial'] },
+      } }],
+      { new: true, session }
+    );
+    if (!updatedInvoice) {
+      await session.abortTransaction();
+      return res.status(409).json({ error: { message: 'Invoice balance changed or the invoice is no longer payable; refresh and try again' } });
+    }
 
     const cashAccount = method === 'MTN Mobile Money' || method === 'Airtel Money'
       ? 'Mobile Money Clearing'
       : method || 'Cash and Mobile Money';
-    await JournalEntry.create({
+    await JournalEntry.create([{
       entryNumber: await generateJournalEntryNumber(),
       date: new Date(),
       description: `Fee receipt for ${invoice.invoiceNumber}`,
@@ -271,11 +489,18 @@ router.post('/invoices/:id/pay', protect, authorize(...FINANCE_EDIT_ROLES, 'pare
         { accountCode: '1100', accountName: 'Student Fees Receivable', accountType: 'Asset', debit: 0, credit: payAmount },
       ],
       createdBy: req.user._id,
-    });
+    }], { session });
+    await session.commitTransaction();
 
-    res.json({ message: 'Payment recorded successfully', invoice });
+    await logAudit(req, { action: 'payment.created', module: 'payments', recordId: invoice._id,
+      oldValue, newValue: { paidAmount: updatedInvoice.paidAmount, balance: updatedInvoice.balance, status: updatedInvoice.status, method, amount: payAmount },
+      description: `UGX ${payAmount} payment recorded for invoice ${invoice.invoiceNumber}` });
+    res.json({ message: 'Payment recorded successfully', invoice: updatedInvoice });
   } catch (err) {
+    if (session?.inTransaction()) await session.abortTransaction();
     res.status(500).json({ error: { message: err.message } });
+  } finally {
+    if (session) await session.endSession();
   }
 });
 
@@ -285,7 +510,7 @@ router.get('/my-invoices', protect, async (req, res) => {
   try {
     let studentIds = [];
     if (req.user.role === 'parent') {
-      const students = await Student.find({ parentUser: req.user._id });
+      const students = await Student.find(parentStudentFilter(req.user));
       studentIds = students.map(s => s._id);
     } else if (req.user.role === 'student') {
       const student = await Student.findOne({ user: req.user._id });
@@ -481,25 +706,30 @@ router.get('/wallets/:studentId', protect, authorize('super-admin', 'admin', 'pa
 });
 
 // @route POST /api/finance/wallets/:studentId/transaction
-router.post('/wallets/:studentId/transaction', protect, authorize('super-admin', 'admin', 'parent'), async (req, res) => {
+router.post('/wallets/:studentId/transaction', protect, authorize(...FINANCE_EDIT_ROLES, 'parent'), async (req, res) => {
   try {
-    if (!['super-admin', 'admin'].includes(req.user.role) && !(await canAccessStudent(req.user, req.params.studentId))) {
+    if (!FINANCE_EDIT_ROLES.includes(req.user.role) && !(await canAccessStudent(req.user, req.params.studentId))) {
       return res.status(403).json({ error: { message: 'Not authorized to use this wallet' } });
     }
     const { type, amount, vendor, itemDescription } = req.body;
-    let wallet = await Wallet.findOne({ student: req.params.studentId });
-    if (!wallet) return res.status(404).json({ error: { message: 'Wallet not found' } });
-    
-    if (type === 'purchase') {
-      if (wallet.balance < amount) return res.status(400).json({ error: { message: 'Insufficient balance' } });
-      wallet.balance -= amount;
-    } else if (type === 'deposit') {
-      wallet.balance += amount;
+    const transactionAmount = Number(amount);
+    if (!['deposit', 'purchase'].includes(type)) return res.status(400).json({ error: { message: 'Transaction type must be deposit or purchase' } });
+    if (!Number.isSafeInteger(transactionAmount) || transactionAmount <= 0) return res.status(400).json({ error: { message: 'Amount must be a positive whole number of UGX' } });
+    if (type === 'deposit' && !FINANCE_EDIT_ROLES.includes(req.user.role)) {
+      return res.status(403).json({ error: { message: 'Wallet deposits must be recorded by school finance staff after payment is confirmed' } });
     }
-
-    wallet.transactions.push({ type, amount, vendor, itemDescription });
-    await wallet.save();
-    
+    const update = {
+      $inc: { balance: type === 'purchase' ? -transactionAmount : transactionAmount },
+      $push: { transactions: { type, amount: transactionAmount, vendor, itemDescription, date: new Date() } },
+    };
+    const filter = { student: req.params.studentId, isActive: true };
+    if (type === 'purchase') filter.balance = { $gte: transactionAmount };
+    const wallet = await Wallet.findOneAndUpdate(filter, update, { new: true, runValidators: true });
+    if (!wallet) {
+      const exists = await Wallet.exists({ student: req.params.studentId });
+      if (!exists) return res.status(404).json({ error: { message: 'Wallet not found' } });
+      return res.status(400).json({ error: { message: 'Wallet is inactive or has insufficient balance' } });
+    }
     res.json(wallet);
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });

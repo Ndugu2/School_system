@@ -3,22 +3,22 @@
 ![Admin Dashboard](web/screens/admin/home-page.png)
 
 ## Overview
-A comprehensive, modern School Management System engineered to streamline administrative workflows, enhance teacher-student-parent communication, and centralize academic operations. Built with a robust, scalable architecture, this platform features a Web-based Admin Console and dedicated Mobile Applications for Teachers, Supervisors, and Parents.
+A comprehensive School Management System for school administration, academics, finance, and communication. The React Native mobile application is currently a UI preview with sample data; production workflows are provided through the authenticated web application and backend.
 
 ## Key Features & Capabilities
 * **Role-Based Access Control (RBAC):** Secure, segmented environments tailored for Admins, Teachers, Supervisors, and Parents.
 * **Centralized Administration:** Web console for managing users (students, parents, teachers, staff), classes, subjects, and timetables.
-* **Real-time Attendance Tracking:** Mobile-first attendance management for teachers, with instant visibility for parents.
+* **Attendance Tracking:** Record and review attendance through the authenticated web application. The mobile preview is not connected to live records.
 * **Academic Performance:** Seamless grading system allowing teachers to input and update final grades, accessible via the parent portal.
 * **Communication & Issue Resolution:** Integrated complaint submission and tracking system connecting parents, supervisors, and admins.
 * **Event Management:** Keep all stakeholders informed about upcoming school activities and announcements.
 * **Ugandan Curriculum Grading:** Full support for NCDC O-Level (20% Formative / 80% Summative) and UACE A-Level 20-point combination calculator.
-* **Ugandan Financial ERP:** Fee invoices in UGX, Mobile Money (MTN MoMo / Airtel Money) & SchoolPay webhooks, and receipts.
+* **Ugandan Financial ERP:** Fee invoices in UGX, receipts, a payment ledger, and MTN MoMo Collections with provider-side status verification (requires MTN credentials).
 
 ## Tech Stack
 * **Backend:** Node.js, Express, TypeScript / JavaScript, MongoDB
 * **Web Admin Console:** React, Vite, TypeScript / JavaScript, Modern Vanilla CSS / Tailwind
-* **Mobile Applications:** React Native, Expo, TypeScript
+* **Mobile UI Preview:** React Native, Expo, TypeScript (not production-connected)
 
 ## Platform Showcases
 Explore the UI/UX and features for each user role:

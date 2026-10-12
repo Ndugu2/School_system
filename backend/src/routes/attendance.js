@@ -4,6 +4,7 @@ const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
 const { protect, authorize } = require('../middleware/auth');
 const { logAudit } = require('../middleware/auditLog');
+const { canAccessStudent, parentStudentFilter } = require('../middleware/recordAccess');
 const router = express.Router();
 
 // @route   POST /api/attendance
@@ -108,8 +109,7 @@ router.get('/', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy
     }
     if (req.user.role === 'parent') {
       if (!studentId) return res.status(400).json({ error: { message: 'studentId is required for parent attendance' } });
-      const student = await Student.findOne({ _id: studentId, $or: [{ parentUser: req.user._id }, { parentEmail: req.user.email }] });
-      if (!student) return res.status(403).json({ error: { message: 'Not authorized to view this attendance record' } });
+      if (!(await canAccessStudent(req.user, studentId))) return res.status(403).json({ error: { message: 'Not authorized to view this attendance record' } });
     }
     if (req.user.role === 'student') {
       if (!studentId) return res.status(400).json({ error: { message: 'studentId is required for student attendance' } });

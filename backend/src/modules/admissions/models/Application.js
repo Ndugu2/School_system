@@ -25,6 +25,7 @@ const applicationSchema = new mongoose.Schema({
   parentName: { type: String, required: true, trim: true },
   parentPhone: { type: String, required: true, trim: true },
   parentEmail: { type: String, trim: true, lowercase: true },
+  parentRelationship: { type: String, trim: true, default: 'Guardian' },
   parentOccupation: { type: String, trim: true },
   parentAddress: { type: String, trim: true },
 

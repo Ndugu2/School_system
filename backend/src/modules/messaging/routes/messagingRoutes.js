@@ -2,8 +2,11 @@ const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
 const User = require('../../../models/User');
+const Student = require('../../../models/Student');
 const Message = require('../../../models/Message');
 const { protect, authorize } = require('../../../middleware/auth');
+const { sendSMS } = require('../services/smsService');
+const { sendMail } = require('../../../utils/email');
 
 const STAFF_ROLES = [
   'super-admin', 'admin', 'supervisor', 'deputy-head', 'bursar',
@@ -131,12 +134,19 @@ router.put('/read-all', protect, async (req, res) => {
 // @desc  Send targeted or broadcast notification (admin/teacher)
 router.post('/send', protect, authorize('super-admin', 'admin', 'teacher'), async (req, res) => {
   const { recipientIds, broadcastAudience, title, message, category, priority, relatedModel, relatedId } = req.body;
+  const channels = req.body.channels || ['in-app'];
+  const supportedChannels = ['in-app', 'sms', 'email'];
+  if (!title?.trim() || !message?.trim()) {
+    return res.status(400).json({ error: { message: 'A notification title and message are required' } });
+  }
+  if (!Array.isArray(channels) || channels.length === 0 || channels.some(channel => !supportedChannels.includes(channel))) {
+    return res.status(400).json({ error: { message: 'channels must contain one or more of: in-app, sms, email' } });
+  }
 
   try {
     let targetUserIds = [];
 
     if (broadcastAudience && broadcastAudience !== 'none') {
-      // Find all users of the given role
       const roleMap = {
         parents: 'parent',
         students: 'student',
@@ -144,7 +154,8 @@ router.post('/send', protect, authorize('super-admin', 'admin', 'teacher'), asyn
         admins: 'admin',
       };
       const role = roleMap[broadcastAudience];
-      const users = role ? await User.find({ role, isActive: true }, '_id') : await User.find({ isActive: true }, '_id');
+      if (!role) return res.status(400).json({ error: { message: 'Unsupported broadcast audience' } });
+      const users = await User.find({ role, isActive: true }, '_id');
       targetUserIds = users.map(u => u._id);
     } else if (recipientIds && recipientIds.length > 0) {
       targetUserIds = recipientIds;
@@ -152,24 +163,86 @@ router.post('/send', protect, authorize('super-admin', 'admin', 'teacher'), asyn
       return res.status(400).json({ error: { message: 'Provide either recipientIds or broadcastAudience' } });
     }
 
-    const notifications = await Notification.insertMany(
-      targetUserIds.map(uid => ({
+    const recipients = await User.find({ _id: { $in: targetUserIds }, isActive: true }, '_id name email role');
+    if (recipients.length === 0) return res.status(404).json({ error: { message: 'No active recipients found' } });
+
+    const delivery = [];
+    if (channels.includes('in-app')) {
+      const notifications = await Notification.insertMany(recipients.map(user => ({
         type: 'in-app',
         priority: priority || 'normal',
         senderId: req.user._id,
         senderName: req.user.name,
-        recipientId: uid,
-        title,
-        message,
+        recipientId: user._id,
+        title: title.trim(),
+        message: message.trim(),
         category: category || 'announcement',
         isBroadcast: !!broadcastAudience,
         broadcastAudience: broadcastAudience || null,
         relatedModel: relatedModel || null,
         relatedId: relatedId || null,
-      }))
-    );
+      })));
+      delivery.push({ channel: 'in-app', accepted: notifications.length, failed: 0 });
+    }
 
-    res.status(201).json({ message: `Sent to ${notifications.length} recipient(s)`, count: notifications.length });
+    const parentContacts = channels.includes('sms')
+      ? await Student.find({
+          $or: [
+            { parentUser: { $in: recipients.map(user => user._id) } },
+            { parentEmail: { $in: recipients.map(user => user.email).filter(Boolean) } },
+            { 'guardians.user': { $in: recipients.map(user => user._id) } },
+            { 'guardians.email': { $in: recipients.map(user => user.email).filter(Boolean) } },
+          ],
+        }).select('parentUser parentEmail parentPhone guardians')
+      : [];
+
+    for (const channel of channels.filter(item => item !== 'in-app')) {
+      let accepted = 0;
+      const failures = [];
+      for (const recipient of recipients) {
+        const linkedStudents = channel === 'sms'
+          ? parentContacts.filter(student =>
+              String(student.parentUser) === String(recipient._id) ||
+              (student.parentEmail && student.parentEmail.toLowerCase() === recipient.email?.toLowerCase()) ||
+              (student.guardians || []).some(guardian =>
+                String(guardian.user) === String(recipient._id) ||
+                (guardian.email && guardian.email.toLowerCase() === recipient.email?.toLowerCase())))
+          : [];
+        const guardianPhone = linkedStudents.flatMap(student => student.guardians || [])
+          .find(guardian =>
+            guardian.phone &&
+            (String(guardian.user) === String(recipient._id) ||
+              guardian.email?.toLowerCase() === recipient.email?.toLowerCase())
+          )?.phone;
+        const destination = channel === 'email'
+          ? recipient.email
+          : guardianPhone || linkedStudents.find(student => student.parentPhone)?.parentPhone;
+        if (!destination) {
+          failures.push({ recipientId: recipient._id, error: `No ${channel} destination on file` });
+          continue;
+        }
+        try {
+          const result = channel === 'sms'
+            ? await sendSMS(destination, `${title.trim()}: ${message.trim()}`)
+            : await sendMail(destination, title.trim(), `<p>${message.trim().replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char])}</p>`);
+          if (!result?.success && channel === 'sms') {
+            failures.push({ recipientId: recipient._id, error: result?.status || 'SMS delivery was not accepted' });
+          } else {
+            accepted++;
+          }
+        } catch (err) {
+          failures.push({ recipientId: recipient._id, error: err.message });
+        }
+      }
+      delivery.push({ channel, accepted, failed: failures.length, failures });
+    }
+
+    const failed = delivery.some(result => result.failed > 0);
+    res.status(failed ? 207 : 201).json({
+      message: failed ? 'Notification was only partially delivered' : 'Notification delivery completed',
+      count: recipients.length,
+      delivery,
+    });
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
   }

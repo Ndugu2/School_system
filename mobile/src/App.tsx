@@ -31,9 +31,8 @@ export default function App() {
             <Text style={styles.termSub}>Term II, 2026 • Kampala, Uganda</Text>
           </View>
         </View>
-        <View style={styles.livePill}>
-          <View style={styles.liveDot} />
-          <Text style={styles.livePillText}>CONNECTED</Text>
+        <View style={styles.previewPill}>
+          <Text style={styles.previewPillText}>DEMO PREVIEW</Text>
         </View>
       </View>
 
@@ -113,23 +112,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
   },
-  livePill: {
+  previewPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#064e3b',
+    backgroundColor: '#78350f',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    gap: 5,
   },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#34d399',
-  },
-  livePillText: {
-    color: '#34d399',
+  previewPillText: {
+    color: '#fde68a',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,

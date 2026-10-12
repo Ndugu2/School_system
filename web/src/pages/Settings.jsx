@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import GradingSchemeSettings from './GradingSchemeSettings';
 import {
   School, Calendar, Users, Bell, Shield, Smartphone,
   Save, Edit3, CheckCircle, Plus, Trash2, Key, Globe, 
@@ -9,6 +10,7 @@ import {
 const TABS = [
   { id: 'school', label: 'School Profile', icon: School },
   { id: 'academic', label: 'Academic Calendar', icon: Calendar },
+  { id: 'grading', label: 'Grading Rules', icon: BookOpen },
   { id: 'users', label: 'User Management', icon: Users },
   { id: 'notifications', label: 'Notifications & SMS', icon: Bell },
   { id: 'security', label: 'Security', icon: Shield },
@@ -238,6 +240,8 @@ export default function Settings() {
               </div>
             </div>
           )}
+
+          {activeTab === 'grading' && <GradingSchemeSettings />}
 
           {/* === USER MANAGEMENT === */}
           {activeTab === 'users' && (

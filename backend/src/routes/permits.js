@@ -2,7 +2,12 @@ const express = require('express');
 const Permit = require('../models/Permit');
 const Student = require('../models/Student');
 const Class = require('../models/Class');
-const StudentApplication = require('../models/StudentApplication');
+let StudentApplication = null;
+try {
+  StudentApplication = require('../models/StudentApplication');
+} catch (_) {
+  StudentApplication = null;
+}
 const { protect, authorize } = require('../middleware/auth');
 const router = express.Router();
 
@@ -62,7 +67,7 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 // ── 3. POST /api/permits/issue — Issue or Refresh a Class Entry Permit ───────
-router.post('/issue', protect, authorize('super-admin', 'admin', 'headteacher', 'dos', 'teacher'), async (req, res) => {
+router.post('/issue', protect, authorize('super-admin', 'admin', 'headteacher', 'director-of-studies', 'teacher'), async (req, res) => {
   try {
     const { studentId, term, academicYear, stream, optionalSubjects } = req.body;
 
@@ -94,11 +99,15 @@ router.post('/issue', protect, authorize('super-admin', 'admin', 'headteacher', 
     // Resolve optional subjects
     let resolvedOptionals = optionalSubjects || [];
     if (resolvedOptionals.length === 0) {
-      const app = await StudentApplication.findOne({ admission_number: student.admissionNumber });
-      if (app && app.selected_subjects && app.selected_subjects.length > 0) {
-        resolvedOptionals = app.selected_subjects;
-      } else if (app && app.combination_name) {
-        resolvedOptionals = [app.combination_name];
+      if (StudentApplication) {
+        const app = await StudentApplication.findOne({ admission_number: student.admissionNumber });
+        if (app && app.selected_subjects && app.selected_subjects.length > 0) {
+          resolvedOptionals = app.selected_subjects;
+        } else if (app && app.combination_name) {
+          resolvedOptionals = [app.combination_name];
+        } else {
+          resolvedOptionals = isALevel ? ['Physics', 'Chemistry', 'Mathematics (PCM)'] : ['CRE', 'Agriculture', 'Computer Studies', 'Commerce'];
+        }
       } else {
         resolvedOptionals = isALevel ? ['Physics', 'Chemistry', 'Mathematics (PCM)'] : ['CRE', 'Agriculture', 'Computer Studies', 'Commerce'];
       }

@@ -5,6 +5,17 @@ const AcademicPermission = require('../models/AcademicPermission');
 
 const isSchoolManager = (role) => ['super-admin', 'admin', 'headteacher', 'hod', 'supervisor', 'deputy-head', 'director-of-studies', 'academic-admin', 'registrar'].includes(role);
 
+const parentStudentFilter = (user) => ({
+  $or: [
+    { parentUser: user._id },
+    { 'guardians.user': user._id },
+    ...(user.email ? [
+      { parentEmail: user.email.toLowerCase() },
+      { 'guardians.email': user.email.toLowerCase() },
+    ] : []),
+  ],
+});
+
 const teacherAssignments = async (userId) => {
   const teacher = await Teacher.findOne({ user: userId }).select('classes subjects departments');
   return {
@@ -53,13 +64,17 @@ const hasAcademicEntryPermission = async (user, { subjectId, classId, term, acad
 
 const canAccessStudent = async (user, studentId) => {
   if (isSchoolManager(user.role)) return true;
-  const student = await Student.findById(studentId).select('user parentUser parentEmail currentClass');
+  const student = await Student.findById(studentId).select('user parentUser parentEmail guardians currentClass');
   if (!student) return false;
   if (user.role === 'student') return String(student.user) === String(user._id);
   if (user.role === 'parent') {
     const linkedAccount = student.parentUser && String(student.parentUser) === String(user._id);
     const linkedEmail = student.parentEmail && user.email && student.parentEmail.toLowerCase() === user.email.toLowerCase();
-    return Boolean(linkedAccount || linkedEmail);
+    const linkedGuardian = (student.guardians || []).some(guardian =>
+      (guardian.user && String(guardian.user) === String(user._id)) ||
+      (guardian.email && user.email && guardian.email.toLowerCase() === user.email.toLowerCase())
+    );
+    return Boolean(linkedAccount || linkedEmail || linkedGuardian);
   }
   if (['teacher', 'class-teacher'].includes(user.role)) {
     const { classIds } = await teacherAssignments(user._id);
@@ -76,4 +91,4 @@ const canTeachSubjectInClass = async (user, classId, subjectId) => {
 
 const hasAssignedClass = (classIds, classId) => classIds.includes(String(classId));
 
-module.exports = { isSchoolManager, teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent, canTeachSubjectInClass, hasAssignedClass };
+module.exports = { isSchoolManager, teacherAssignments, academicScope, hasAcademicEntryPermission, canAccessStudent, canTeachSubjectInClass, hasAssignedClass, parentStudentFilter };

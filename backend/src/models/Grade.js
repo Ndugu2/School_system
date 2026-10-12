@@ -52,7 +52,6 @@ const gradeSchema = new mongoose.Schema({
   },
   gradeValue: {
     type: String,
-    enum: ['D1', 'D2', 'C3', 'C4', 'C5', 'C6', 'P7', 'P8', 'F9'],
     required: true
   },
   remarks: {

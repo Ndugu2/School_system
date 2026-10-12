@@ -1,11 +1,22 @@
 const express = require('express');
 const router = express.Router();
+const { MIN_ACCOUNT_PASSWORD_LENGTH, isAcceptableAccountPassword } = require('../../../utils/passwordPolicy');
 const Enquiry = require('../models/Enquiry');
 const Application = require('../models/Application');
 const Student = require('../../../models/Student');
 const User = require('../../../models/User');
 const Class = require('../../../models/Class');
+const AcademicYear = require('../../../models/AcademicYear');
+const Registration = require('../../../models/Registration');
 const { protect, authorize } = require('../../../middleware/auth');
+const { generateRegistrationNumber } = require('../../../utils/registrationNumber');
+const { logAudit } = require('../../../middleware/auditLog');
+
+const normalizeClassLevel = value => {
+  const normalized = String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+  const match = normalized.match(/^(?:S|SENIOR)([1-6])$/);
+  return match ? `S${match[1]}` : normalized;
+};
 
 // ── Helper: auto-generate application number ────────────────────────────────
 const generateAppNumber = async () => {
@@ -146,7 +157,11 @@ router.put('/applications/:id/status', protect, authorize('super-admin', 'admin'
 
 // POST /api/admissions/applications/:id/enroll — convert accepted → Student record
 router.post('/applications/:id/enroll', protect, authorize('super-admin', 'admin'), async (req, res) => {
-  const { classId, studentId: customStudentId } = req.body;
+  const { classId, streamId, studentId: customStudentId, password } = req.body;
+  if (!classId) return res.status(400).json({ error: { message: 'A class must be selected for enrolment' } });
+  if (!isAcceptableAccountPassword(password)) {
+    return res.status(400).json({ error: { message: `Set an account password of at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters` } });
+  }
   try {
     const application = await Application.findById(req.params.id);
     if (!application) return res.status(404).json({ error: { message: 'Application not found' } });
@@ -157,11 +172,32 @@ router.post('/applications/:id/enroll', protect, authorize('super-admin', 'admin
       return res.status(400).json({ error: { message: 'Application has already been enrolled' } });
     }
 
-    // Create User account for student
+    const [targetClass, academicYear] = await Promise.all([
+      Class.findById(classId),
+      AcademicYear.findOne({ year: application.applyingForYear }),
+    ]);
+    if (!targetClass) return res.status(404).json({ error: { message: 'Class not found' } });
+    if (targetClass.level !== normalizeClassLevel(application.applyingForClass)) {
+      return res.status(400).json({ error: { message: 'Selected class does not match the class requested in the application' } });
+    }
+    if (!academicYear) {
+      return res.status(400).json({ error: { message: `Academic year ${application.applyingForYear} must be configured before enrolment` } });
+    }
+    if (!academicYear.terms.some(term => term.name === application.applyingForTerm)) {
+      return res.status(400).json({ error: { message: `${application.applyingForTerm} is not configured for academic year ${application.applyingForYear}` } });
+    }
+
+    const stream = streamId ? targetClass.streams.id(streamId) : null;
+    if (streamId && !stream) {
+      return res.status(404).json({ error: { message: 'Stream not found in the selected class' } });
+    }
+    const registrationNumber = await generateRegistrationNumber(academicYear.year, application.applyingForTerm);
+
+    // Parent email belongs to the guardian, not the student's unique login.
     const userRecord = await User.create({
       name: application.childName,
-      email: application.parentEmail || `student.${application.applicationNumber.toLowerCase().replace(/-/g, '')}@school.local`,
-      password: `${application.childName.split(' ')[0].toLowerCase()}@2024`,
+      email: `student.${application.applicationNumber.toLowerCase().replace(/-/g, '')}@school.local`,
+      password,
       role: 'student',
     });
 
@@ -172,24 +208,63 @@ router.post('/applications/:id/enroll', protect, authorize('super-admin', 'admin
     const student = await Student.create({
       user: userRecord._id,
       studentId: studentIdCode,
-      class: classId,
+      admissionNumber: studentIdCode,
+      studentStatus: 'enrolled',
+      currentClass: targetClass._id,
+      currentClassLevel: targetClass.level,
+      currentStream: stream?.name || null,
       dob: application.childDob,
       gender: application.childGender,
       enrollmentDate: new Date(),
       parentName: application.parentName,
       parentPhone: application.parentPhone,
       parentEmail: application.parentEmail,
+      parentRelationship: application.parentRelationship || 'Guardian',
+      guardians: [
+        {
+          name: application.parentName,
+          relationship: application.parentRelationship || 'Guardian',
+          phone: application.parentPhone,
+          email: application.parentEmail,
+          isPrimary: true,
+        },
+        ...(application.secondParentName ? [{
+          name: application.secondParentName,
+          relationship: application.secondParentRelationship || 'Guardian',
+          phone: application.secondParentPhone,
+          isPrimary: false,
+        }] : []),
+      ],
+    });
+
+    const registration = await Registration.create({
+      student: student._id,
+      academicYear: academicYear._id,
+      term: application.applyingForTerm,
+      class: targetClass._id,
+      streamId: stream?._id || null,
+      streamName: stream?.name || null,
+      classLevel: targetClass.level,
+      status: 'enrolled',
+      registrationNumber,
+      registeredBy: req.user._id,
     });
 
     await Application.findByIdAndUpdate(req.params.id, {
       status: 'enrolled',
       enrolledStudentId: student._id,
     });
+    await logAudit(req, {
+      action: 'registration.created',
+      module: 'registrations',
+      recordId: registration._id,
+      recordRef: registration.registrationNumber,
+      description: `Application ${application.applicationNumber} enrolled as student ${student.studentId}`,
+    });
 
     res.status(201).json({
       message: 'Student enrolled successfully',
       student,
-      temporaryPassword: `${application.childName.split(' ')[0].toLowerCase()}@2024`,
     });
   } catch (err) {
     res.status(400).json({ error: { message: err.message } });

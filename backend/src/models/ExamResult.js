@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getGradingScheme, gradeForPercentage } = require('../utils/grading');
 
 /**
  * ExamResult — a teacher-entered mark for one student in one subject for one exam type.
@@ -95,14 +96,13 @@ const examResultSchema = new mongoose.Schema({
   // ── Uganda Grading Scale ──────────────────────────────────────────────────────
   grade: {
     type: String,
-    enum: ['D1', 'D2', 'C3', 'C4', 'C5', 'C6', 'P7', 'P8', 'F9', ''],
     default: ''
   },
   gradePoints: {
-    // 1 (D1) → 9 (F9) — lower is better in Uganda UCE/UACE grading
+    // Grade points follow the school's configured scheme.
     type: Number,
-    min: 1,
-    max: 9
+    min: 0,
+    max: 100
   },
   remarks: {
     type: String,
@@ -136,23 +136,14 @@ const examResultSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // ── Auto-calculate percentage and Uganda grade before save ─────────────────────
-examResultSchema.pre('save', function (next) {
+examResultSchema.pre('save', async function () {
   if (this.marksObtained !== undefined && this.maxMarks) {
     this.percentage = Math.round((this.marksObtained / this.maxMarks) * 100);
-
-    // Uganda UCE/UACE grading (percentage-based)
-    const p = this.percentage;
-    if (p >= 80)      { this.grade = 'D1'; this.gradePoints = 1; }
-    else if (p >= 70) { this.grade = 'D2'; this.gradePoints = 2; }
-    else if (p >= 65) { this.grade = 'C3'; this.gradePoints = 3; }
-    else if (p >= 60) { this.grade = 'C4'; this.gradePoints = 4; }
-    else if (p >= 55) { this.grade = 'C5'; this.gradePoints = 5; }
-    else if (p >= 50) { this.grade = 'C6'; this.gradePoints = 6; }
-    else if (p >= 45) { this.grade = 'P7'; this.gradePoints = 7; }
-    else if (p >= 40) { this.grade = 'P8'; this.gradePoints = 8; }
-    else              { this.grade = 'F9'; this.gradePoints = 9; }
+    const scheme = await getGradingScheme(this.classLevel, this.academicYear);
+    const band = gradeForPercentage(this.percentage, scheme.gradeBands);
+    this.grade = band.grade;
+    this.gradePoints = band.points;
   }
-  next();
 });
 
 // ── One result per student per subject per exam type per term ──────────────────
