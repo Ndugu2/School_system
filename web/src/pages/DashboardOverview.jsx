@@ -6,10 +6,12 @@ import { useAuth } from '../context/AuthContext';
 export default function DashboardOverview({ setCurrentTab }) {
   const { user } = useAuth();
   const isFinanceManager = user?.role === 'bursar';
+  const canViewFinance = ['super-admin', 'admin', 'headteacher', 'bursar'].includes(user?.role);
   const [searchTerm, setSearchTerm] = useState('');
   const [showQuickActions, setShowQuickActions] = useState(false);
-  const [chartMode, setChartMode] = useState('Weekly');
   const [selectedItem, setSelectedItem] = useState(null);
+  const [attendanceSummary, setAttendanceSummary] = useState(null);
+  const [revenueBreakdown, setRevenueBreakdown] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({
     students: null,
     attendance: null,
@@ -22,26 +24,33 @@ export default function DashboardOverview({ setCurrentTab }) {
 
     const loadDashboardStats = async () => {
       const academicYear = new Date().getFullYear();
-      const [studentsResult, classesResult, attendanceResult, feesResult] = await Promise.allSettled([
+      const financeSummaryUrl = `/finance/reports/summary?term=Term 1&academicYear=${academicYear}`;
+      const results = await Promise.allSettled([
         api.get('/students'),
         api.get('/classes'),
         api.get('/attendance/analytics?term=Term 1'),
-        api.get(`/fees/reports/class-summary?term=Term 1&academicYear=${academicYear}`),
+        canViewFinance ? api.get(financeSummaryUrl) : Promise.resolve(null),
       ]);
 
       if (!isMounted) return;
 
+      const [studentsResult, classesResult, attendanceResult, financeResult] = results;
+      const attendance = attendanceResult.status === 'fulfilled' ? attendanceResult.value : null;
+      const finance = financeResult.status === 'fulfilled' ? financeResult.value : null;
+
+      setAttendanceSummary(attendance);
+      setRevenueBreakdown(Array.isArray(finance?.revenue?.breakdown) ? finance.revenue.breakdown : []);
       setDashboardStats({
-        students: studentsResult.status === 'fulfilled' ? studentsResult.value.length : null,
-        attendance: attendanceResult.status === 'fulfilled' ? attendanceResult.value.daily.rate : null,
-        fees: feesResult.status === 'fulfilled' ? feesResult.value.totalCollected : null,
-        classes: classesResult.status === 'fulfilled' ? classesResult.value.length : null,
+        students: studentsResult.status === 'fulfilled' && Array.isArray(studentsResult.value) ? studentsResult.value.length : null,
+        attendance: attendance?.daily?.total > 0 && Number.isFinite(attendance.daily.rate) ? attendance.daily.rate : null,
+        fees: Number.isFinite(finance?.revenue?.totalRevenue) ? finance.revenue.totalRevenue : null,
+        classes: classesResult.status === 'fulfilled' && Array.isArray(classesResult.value) ? classesResult.value.length : null,
       });
     };
 
     loadDashboardStats();
     return () => { isMounted = false; };
-  }, []);
+  }, [canViewFinance, user?.role]);
 
   const formatCurrency = (amount) => amount === null ? '...' : `UGX ${Number(amount || 0).toLocaleString('en-UG')}`;
   const formatStat = (value, suffix = '') => value === null ? '...' : `${value}${suffix}`;
@@ -77,29 +86,25 @@ export default function DashboardOverview({ setCurrentTab }) {
     { label: 'Receivables Ledger', value: 'Open ledger', delta: 'Invoices and balances', accent: '#7c8cff', tab: 'finance' },
   ] : [
     { label: 'Total Students', value: formatStat(dashboardStats.students), delta: 'Live enrollment', accent: '#7c8cff', tab: 'students' },
-    { label: 'Average Attendance', value: formatStat(dashboardStats.attendance, '%'), delta: 'Today', accent: '#6ee7c8', tab: 'attendance' },
-    { label: 'Fees Collected (UGX)', value: formatCurrency(dashboardStats.fees), delta: 'Term 1 total', accent: '#fbbf24', tab: 'fees' },
-    { label: 'Classes Today', value: formatStat(dashboardStats.classes), delta: 'configured classes', accent: '#5bc0ff', tab: 'classes' },
+    { label: "Today's Attendance", value: formatStat(dashboardStats.attendance, '%'), delta: 'Daily rate', accent: '#6ee7c8', tab: 'attendance' },
+    ...(canViewFinance ? [{ label: 'Fees Collected (UGX)', value: formatCurrency(dashboardStats.fees), delta: 'Term 1 total', accent: '#fbbf24', tab: 'fees' }] : []),
+    { label: 'Configured Classes', value: formatStat(dashboardStats.classes), delta: 'School-wide', accent: '#5bc0ff', tab: 'classes' },
   ];
 
   const attendanceData = [
-    { label: 'Aug', value: 92 },
-    { label: 'Sep', value: 93 },
-    { label: 'Oct', value: 95 },
-    { label: 'Nov', value: 94 },
-    { label: 'Dec', value: 96 },
-  ];
-  const displayedAttendance = chartMode === 'Weekly'
-    ? attendanceData
-    : attendanceData.map((item, index) => ({ ...item, value: item.value + (index % 2 === 0 ? 1 : -1) }));
-
-  const feesData = [
-    { label: 'Aug', value: 32 },
-    { label: 'Sep', value: 45 },
-    { label: 'Oct', value: 39 },
-    { label: 'Nov', value: 52 },
-    { label: 'Dec', value: 48 },
-  ];
+    { label: 'Daily', value: attendanceSummary?.daily },
+    { label: 'Weekly', value: attendanceSummary?.weekly },
+    { label: 'Monthly', value: attendanceSummary?.monthly },
+    { label: 'Term', value: attendanceSummary?.term },
+  ]
+    .filter(item => item.value?.total > 0 && Number.isFinite(item.value.rate))
+    .map(item => ({ label: item.label, value: item.value.rate }));
+  const maximumRevenue = Math.max(0, ...revenueBreakdown.map(item => Number(item.paidAmount) || 0));
+  const feesData = revenueBreakdown.map(item => ({
+    label: item._id,
+    value: Number(item.paidAmount) || 0,
+    height: maximumRevenue ? ((Number(item.paidAmount) || 0) / maximumRevenue) * 100 : 0,
+  }));
 
   const schedule = [
     { time: '08:30-09:30', className: '9A', subject: 'Mathematics', teacher: 'Mr. Okello', status: 'Ongoing' },
@@ -115,9 +120,9 @@ export default function DashboardOverview({ setCurrentTab }) {
     <div className="dashboard-shell" style={styles.dashboardShell}>
       <div className="dashboard-top-bar" style={styles.topBar}>
         <div className="dashboard-search-wrap" style={styles.searchWrap}>
-          <div style={styles.searchBox}>
+          <div className="dashboard-search-box" style={styles.searchBox}>
             <Search size={18} color="#9aa7bd" />
-            <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search modules" aria-label="Search dashboard modules" style={styles.searchInput} />
+            <input className="dashboard-search-input" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search modules" aria-label="Search dashboard modules" style={styles.searchInput} />
           </div>
           {filteredTargets.length > 0 && <div style={styles.searchResults}>
             {filteredTargets.map((target) => {
@@ -138,31 +143,23 @@ export default function DashboardOverview({ setCurrentTab }) {
               <button onClick={() => navigateTo('fees')}>Record payment</button>
             </div>}
           </div>
-          <button style={styles.iconBtn} onClick={() => navigateTo('notifications')} aria-label="Open notifications"><Bell size={18} /></button>
-          <div className="dashboard-user-chip" style={styles.userChip}>
-            <div style={styles.avatar}>{user?.name?.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'U'}</div>
-            <div style={styles.userMeta}>
-                <span style={styles.userName}>{user?.name || 'User'}</span>
-                <span style={styles.userRole}>{roleLabel}</span>
-            </div>
-          </div>
         </div>
       </div>
 
       <section className="dashboard-welcome" style={styles.welcomeBanner}>
         <div style={styles.welcomeCopy}>
-          <span style={styles.welcomeEyebrow}>Ndugu Academy · {new Date().toLocaleDateString('en-UG', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-          <h1 style={styles.welcomeTitle}>{greeting}, {firstName}</h1>
-          <p style={styles.welcomeText}>Here&apos;s your school overview for today. Keep the {roleLabel} workspace moving with the latest activity below.</p>
+          <span className="dashboard-welcome-eyebrow" style={styles.welcomeEyebrow}>Ndugu Academy · {new Date().toLocaleDateString('en-UG', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+          <h1 className="dashboard-welcome-title" style={styles.welcomeTitle}>{greeting}, {firstName}</h1>
+          <p className="dashboard-welcome-text" style={styles.welcomeText}>Here&apos;s your school overview for today. Keep the {roleLabel} workspace moving with the latest activity below.</p>
         </div>
         <div style={styles.welcomeMark} aria-hidden="true"><GraduationCap size={30} /></div>
       </section>
 
       <div className="dashboard-stats-grid" style={styles.statsGrid}>
         {overviewStats.map((card) => (
-          <button key={card.label} style={styles.statCard} onClick={() => navigateTo(card.tab)}>
-            <div style={styles.statTitle}>{card.label}</div>
-            <div style={styles.statValue}>{card.value}</div>
+          <button key={card.label} className="dashboard-stat-card" style={styles.statCard} onClick={() => navigateTo(card.tab)}>
+            <div className="dashboard-stat-title" style={styles.statTitle}>{card.label}</div>
+            <div className="dashboard-stat-value" style={styles.statValue}>{card.value}</div>
             <div style={styles.statDeltaRow}>
               <span style={{ ...styles.deltaBadge, background: `${card.accent}22`, color: card.accent }}>
                 {card.delta}
@@ -171,55 +168,51 @@ export default function DashboardOverview({ setCurrentTab }) {
           </button>
         ))}
       </div>
+      <p style={{ color: '#94a3b8', fontSize: 12, margin: 0 }}>
+        KPI cards and attendance/fee charts use API data. Schedule and recent-activity panels below are illustrative preview data.
+      </p>
 
       <div className="dashboard-content-grid" style={{ ...styles.contentGrid, display: isFinanceManager ? 'none' : undefined }}>
         <div className="dashboard-panel" style={styles.panel}>
           <div className="dashboard-panel-header" style={styles.panelHeader}>
             <div style={styles.panelTitleRow}>
-              <div style={styles.panelTitleIcon}><TrendingUp size={16} /></div>
-              <span style={styles.panelTitle}>Attendance Overview</span>
+              <div className="dashboard-panel-icon" style={styles.panelTitleIcon}><TrendingUp size={16} /></div>
+              <span className="dashboard-panel-title" style={styles.panelTitle}>Attendance Rate by Period</span>
             </div>
-            <button style={styles.filterBtn} onClick={() => setChartMode((mode) => mode === 'Weekly' ? 'Monthly' : 'Weekly')}>{chartMode}</button>
           </div>
 
-          <div style={styles.chartArea}>
-            <div style={styles.chartGrid}>
-              {[90, 92, 94, 96, 98].map((y) => (
-                <div key={y} style={{ ...styles.chartLine, bottom: `${(y - 90) / 10 * 100}%` }} />
-              ))}
-            </div>
-            <div style={styles.lineChartWrap}>
-              <svg viewBox="0 0 420 180" preserveAspectRatio="none" style={styles.lineChart}>
-                <path d="M 0 120 C 60 110, 90 100, 130 70 S 220 80, 260 60 S 340 50, 420 35" fill="none" stroke="#67e8d4" strokeWidth="3" strokeLinecap="round" />
-                <circle cx="130" cy="70" r="5" fill="#67e8d4" />
-                <circle cx="260" cy="60" r="5" fill="#67e8d4" />
-                <circle cx="420" cy="35" r="5" fill="#67e8d4" />
-              </svg>
-            </div>
-            <div style={styles.axisRow}>
-              {displayedAttendance.map((item) => (
-                <div key={item.label} style={styles.axisItem}>{item.label}</div>
-              ))}
-            </div>
+          <div style={styles.barChartWrap}>
+            {attendanceData.length ? attendanceData.map((item) => (
+              <div key={item.label} style={styles.barGroup}>
+                <span className="dashboard-bar-value" style={styles.barValue}>{item.value}%</span>
+                <div style={{ height: `${item.value}%`, ...styles.bar, background: '#67e8d4' }} />
+                <span className="dashboard-bar-label" style={styles.barMonth}>{item.label}</span>
+              </div>
+            )) : (
+              <p style={styles.chartEmpty}>Attendance analytics are unavailable for this account.</p>
+            )}
           </div>
         </div>
 
         <div className="dashboard-panel" style={styles.panel}>
           <div className="dashboard-panel-header" style={styles.panelHeader}>
             <div style={styles.panelTitleRow}>
-              <div style={styles.panelTitleIcon}><BadgeDollarSign size={16} /></div>
-              <span style={styles.panelTitle}>Fees Collected (UGX)</span>
+              <div className="dashboard-panel-icon" style={styles.panelTitleIcon}><BadgeDollarSign size={16} /></div>
+              <span className="dashboard-panel-title" style={styles.panelTitle}>Collected by Invoice Status</span>
             </div>
             <button style={styles.moreBtn} onClick={() => navigateTo('fees')} aria-label="Open fees and invoices">•••</button>
           </div>
 
           <div style={styles.barChartWrap}>
-            {feesData.map((item) => (
+            {feesData.length ? feesData.map((item) => (
               <div key={item.label} style={styles.barGroup}>
-                <div style={{ height: `${item.value}%`, ...styles.bar, background: item.value > 48 ? '#67e8d4' : '#facc15' }} />
-                <span style={styles.barMonth}>{item.label}</span>
+                <span className="dashboard-bar-value" style={styles.barValue}>{formatCurrency(item.value)}</span>
+                <div style={{ height: `${item.height}%`, ...styles.bar, background: '#facc15', minHeight: item.value > 0 ? '3px' : 0 }} />
+                <span className="dashboard-bar-label" style={styles.barMonth}>{item.label}</span>
               </div>
-            ))}
+            )) : (
+              <p style={styles.chartEmpty}>Finance summary is unavailable for this account.</p>
+            )}
           </div>
         </div>
       </div>
@@ -228,8 +221,8 @@ export default function DashboardOverview({ setCurrentTab }) {
         <div className="dashboard-panel" style={styles.panel}>
           <div className="dashboard-panel-header" style={styles.panelHeader}>
             <div style={styles.panelTitleRow}>
-              <div style={styles.panelTitleIcon}><CalendarCheck2 size={16} /></div>
-              <span style={styles.panelTitle}>Today&apos;s Class Schedule</span>
+              <div className="dashboard-panel-icon" style={styles.panelTitleIcon}><CalendarCheck2 size={16} /></div>
+              <span className="dashboard-panel-title" style={styles.panelTitle}>Today&apos;s Class Schedule (sample)</span>
             </div>
             <button style={styles.moreBtn} onClick={() => navigateTo('operations')} aria-label="Open operations and events">•••</button>
           </div>
@@ -261,8 +254,8 @@ export default function DashboardOverview({ setCurrentTab }) {
         <div className="dashboard-panel" style={styles.panel}>
           <div className="dashboard-panel-header" style={styles.panelHeader}>
             <div style={styles.panelTitleRow}>
-              <div style={styles.panelTitleIcon}><Clock3 size={16} /></div>
-              <span style={styles.panelTitle}>Recent Activity</span>
+              <div className="dashboard-panel-icon" style={styles.panelTitleIcon}><Clock3 size={16} /></div>
+              <span className="dashboard-panel-title" style={styles.panelTitle}>Recent Activity (sample)</span>
             </div>
             <button style={styles.moreBtn} onClick={() => navigateTo('notifications')} aria-label="Open recent notifications">•••</button>
           </div>
@@ -272,8 +265,8 @@ export default function DashboardOverview({ setCurrentTab }) {
               <button key={item.text} style={styles.activityItem} onClick={() => setSelectedItem({ type: 'Recent activity', title: item.text, details: item.time, action: 'Open notifications', tab: 'notifications' })}>
                 <div style={styles.activityBullet} />
                 <div style={styles.activityBody}>
-                  <div style={styles.activityText}>{item.text}</div>
-                  <div style={styles.activityMeta}>{item.time}</div>
+                  <div className="dashboard-activity-text" style={styles.activityText}>{item.text}</div>
+                  <div className="dashboard-activity-meta" style={styles.activityMeta}>{item.time}</div>
                 </div>
                 {index === 0 ? <div style={styles.helpBadge}><ArrowUpRight size={14} /></div> : null}
               </button>
@@ -282,8 +275,8 @@ export default function DashboardOverview({ setCurrentTab }) {
         </div>
       </div>
 
-      {isFinanceManager && <div className="dashboard-panel" style={styles.financeFocusPanel}>
-        <div style={styles.panelTitleRow}><div style={styles.panelTitleIcon}><BadgeDollarSign size={16} /></div><span style={styles.panelTitle}>Finance Manager workspace</span></div>
+      {isFinanceManager && <div className="dashboard-panel finance-focus-panel" style={styles.financeFocusPanel}>
+        <div style={styles.panelTitleRow}><div className="dashboard-panel-icon" style={styles.panelTitleIcon}><BadgeDollarSign size={16} /></div><span className="dashboard-panel-title" style={styles.panelTitle}>Finance Manager workspace</span></div>
         <p style={styles.financeFocusText}>Review collections, post receipts, manage fee invoices, and keep the school ledger reconciled.</p>
         <div style={styles.financeActionRow}>
           <button style={styles.financeAction} onClick={() => navigateTo('fees')}><BadgeDollarSign size={17} /> Fees &amp; invoices <ArrowUpRight size={14} /></button>
@@ -293,15 +286,15 @@ export default function DashboardOverview({ setCurrentTab }) {
 
       {selectedItem && (
         <div style={styles.modalBackdrop} role="presentation" onClick={() => setSelectedItem(null)}>
-          <div style={styles.detailModal} role="dialog" aria-modal="true" aria-label={selectedItem.type} onClick={(event) => event.stopPropagation()}>
+          <div className="dashboard-detail-modal" style={styles.detailModal} role="dialog" aria-modal="true" aria-label={selectedItem.type} onClick={(event) => event.stopPropagation()}>
             <div style={styles.modalHeader}>
               <div>
-                <div style={styles.modalEyebrow}>{selectedItem.type}</div>
-                <h3 style={styles.modalTitle}>{selectedItem.title}</h3>
+                <div className="dashboard-modal-eyebrow" style={styles.modalEyebrow}>{selectedItem.type}</div>
+                <h3 className="dashboard-modal-title" style={styles.modalTitle}>{selectedItem.title}</h3>
               </div>
               <button style={styles.closeBtn} onClick={() => setSelectedItem(null)} aria-label="Close details">×</button>
             </div>
-            <p style={styles.modalDetails}>{selectedItem.details}</p>
+            <p className="dashboard-modal-details" style={styles.modalDetails}>{selectedItem.details}</p>
             <button style={styles.modalAction} onClick={() => navigateTo(selectedItem.tab)}>{selectedItem.action}</button>
           </div>
         </div>
@@ -316,7 +309,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '18px',
-    color: '#edf4ff',
+    color: '#1f2937',
   },
   searchWrap: {
     position: 'relative',
@@ -330,28 +323,29 @@ const styles = {
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: '16px',
-    background: '#1b2335',
-    border: '1px solid rgba(148, 163, 184, 0.18)',
-    borderRadius: '14px',
-    padding: '12px 18px',
+    background: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '12px',
+    padding: '12px 16px',
+    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
   },
   welcomeBanner: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '20px',
-    padding: '24px 28px',
-    borderRadius: '16px',
-    background: 'linear-gradient(115deg, #211052 0%, #3f1c85 55%, #155e75 100%)',
-    border: '1px solid rgba(167, 139, 250, 0.35)',
-    boxShadow: '0 14px 30px rgba(48, 28, 104, 0.22)',
+    padding: '26px 30px',
+    borderRadius: '14px',
+    background: 'linear-gradient(115deg, #eef2ff 0%, #eff6ff 100%)',
+    border: '1px solid #dbeafe',
+    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
   },
   welcomeCopy: {
     minWidth: 0,
   },
   welcomeEyebrow: {
     display: 'block',
-    color: '#c4b5fd',
+    color: '#4f46e5',
     fontSize: '11px',
     fontWeight: 700,
     letterSpacing: '0.7px',
@@ -359,14 +353,14 @@ const styles = {
     marginBottom: '6px',
   },
   welcomeTitle: {
-    color: '#ffffff',
+    color: '#172554',
     fontSize: '28px',
     lineHeight: 1.15,
     fontWeight: 800,
     marginBottom: '7px',
   },
   welcomeText: {
-    color: '#ddd6fe',
+    color: '#475569',
     fontSize: '13px',
     maxWidth: '620px',
   },
@@ -377,28 +371,28 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#fef3c7',
-    background: 'rgba(255, 255, 255, 0.13)',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    borderRadius: '16px',
+    color: '#4f46e5',
+    background: '#ffffff',
+    border: '1px solid #dbeafe',
+    borderRadius: '14px',
   },
   searchBox: {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
     width: '100%',
-    background: 'rgba(148, 163, 184, 0.08)',
-    border: '1px solid rgba(148, 163, 184, 0.12)',
-    borderRadius: '10px',
+    background: '#ffffff',
+    border: '1px solid #dbe2ea',
+    borderRadius: '9px',
     padding: '10px 12px',
-    color: '#a7b0c8',
+    color: '#64748b',
   },
   searchInput: {
     width: '100%',
     border: 'none',
     outline: 'none',
     background: 'transparent',
-    color: '#edf4ff',
+    color: '#1f2937',
     fontSize: '14px',
   },
   searchResults: {
@@ -411,10 +405,10 @@ const styles = {
     flexDirection: 'column',
     gap: '4px',
     padding: '6px',
-    background: '#202b40',
-    border: '1px solid rgba(148, 163, 184, 0.2)',
+    background: '#ffffff',
+    border: '1px solid #e2e8f0',
     borderRadius: '10px',
-    boxShadow: '0 14px 30px rgba(0, 0, 0, 0.25)',
+    boxShadow: '0 14px 30px rgba(15, 23, 42, 0.12)',
   },
   searchResult: {
     display: 'flex',
@@ -424,7 +418,7 @@ const styles = {
     border: 'none',
     borderRadius: '7px',
     background: 'transparent',
-    color: '#edf4ff',
+    color: '#334155',
     textAlign: 'left',
     cursor: 'pointer',
   },
@@ -441,14 +435,14 @@ const styles = {
     gap: '4px',
     minWidth: '150px',
     padding: '6px',
-    background: '#202b40',
-    border: '1px solid rgba(148, 163, 184, 0.2)',
+    background: '#ffffff',
+    border: '1px solid #e2e8f0',
     borderRadius: '10px',
-    boxShadow: '0 14px 30px rgba(0, 0, 0, 0.25)',
+    boxShadow: '0 14px 30px rgba(15, 23, 42, 0.12)',
   },
   searchText: {
     fontSize: '14px',
-    color: '#a7b0c8',
+    color: '#64748b',
   },
   topActions: {
     display: 'flex',
@@ -459,9 +453,9 @@ const styles = {
     width: '34px',
     height: '34px',
     borderRadius: '10px',
-    border: '1px solid rgba(148, 163, 184, 0.15)',
-    background: 'rgba(148, 163, 184, 0.08)',
-    color: '#edf4ff',
+    border: '1px solid #e2e8f0',
+    background: '#ffffff',
+    color: '#475569',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -473,8 +467,8 @@ const styles = {
     gap: '10px',
     padding: '6px 10px 6px 6px',
     borderRadius: '12px',
-    background: 'rgba(148, 163, 184, 0.08)',
-    border: '1px solid rgba(148, 163, 184, 0.12)',
+    background: '#f8fafc',
+    border: '1px solid #e2e8f0',
   },
   avatar: {
     width: '32px',
@@ -496,11 +490,11 @@ const styles = {
   userName: {
     fontSize: '12px',
     fontWeight: 700,
-    color: '#edf4ff',
+    color: '#1f2937',
   },
   userRole: {
     fontSize: '10px',
-    color: '#99a3b9',
+    color: '#64748b',
     textTransform: 'uppercase',
   },
   statsGrid: {
@@ -509,28 +503,28 @@ const styles = {
     gap: '16px',
   },
   statCard: {
-    background: '#1a2335',
-    border: '1px solid rgba(148, 163, 184, 0.12)',
-    borderRadius: '14px',
+    background: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '12px',
     padding: '18px 16px',
     minHeight: '110px',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
     borderStyle: 'solid',
     textAlign: 'left',
     cursor: 'pointer',
   },
   statTitle: {
     fontSize: '14px',
-    color: '#a7b0c8',
+    color: '#64748b',
     fontWeight: 600,
   },
   statValue: {
     fontSize: '26px',
     fontWeight: 800,
-    color: '#f3f6ff',
+    color: '#111827',
     lineHeight: 1.2,
   },
   statDeltaRow: {
@@ -549,9 +543,9 @@ const styles = {
     gap: '18px',
   },
   panel: {
-    background: '#1a2335',
-    border: '1px solid rgba(148, 163, 184, 0.12)',
-    borderRadius: '16px',
+    background: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '12px',
     padding: '18px 18px 14px',
   },
   panelHeader: {
@@ -572,65 +566,18 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'rgba(104, 101, 255, 0.12)',
-    color: '#8bb8ff',
+    background: '#eef2ff',
+    color: '#4f46e5',
   },
   panelTitle: {
     fontSize: '15px',
     fontWeight: 700,
-    color: '#f3f6ff',
-  },
-  filterBtn: {
-    background: 'rgba(148, 163, 184, 0.08)',
-    border: '1px solid rgba(148, 163, 184, 0.12)',
-    color: '#c1c9dc',
-    borderRadius: '10px',
-    padding: '7px 10px',
-    fontSize: '12px',
-    cursor: 'pointer',
-  },
-  chartArea: {
-    position: 'relative',
-    height: '220px',
-    paddingTop: '8px',
-  },
-  chartGrid: {
-    position: 'absolute',
-    inset: '0 0 24px 0',
-    backgroundImage: 'linear-gradient(rgba(148,163,184,0.08) 1px, transparent 1px)',
-    backgroundSize: '100% 25%',
-    borderRadius: '12px',
-  },
-  chartLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    borderTop: '1px solid rgba(148,163,184,0.08)',
-  },
-  lineChartWrap: {
-    position: 'relative',
-    height: '180px',
-    width: '100%',
-    zIndex: 1,
-  },
-  lineChart: {
-    width: '100%',
-    height: '100%',
-  },
-  axisRow: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
-    fontSize: '12px',
-    color: '#95a2bb',
-    marginTop: '4px',
-  },
-  axisItem: {
-    textAlign: 'center',
+    color: '#1f2937',
   },
   moreBtn: {
     border: 'none',
     background: 'transparent',
-    color: '#b5c0d8',
+    color: '#64748b',
     fontSize: '20px',
     cursor: 'pointer',
   },
@@ -641,9 +588,11 @@ const styles = {
     justifyContent: 'space-between',
     gap: '14px',
     padding: '12px 0 0',
+    overflowX: 'auto',
   },
   barGroup: {
     flex: 1,
+    minWidth: '58px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -661,6 +610,19 @@ const styles = {
   barMonth: {
     fontSize: '11px',
     color: '#9aa7bd',
+    textAlign: 'center',
+  },
+  barValue: {
+    fontSize: '10px',
+    color: '#cbd5e1',
+    whiteSpace: 'nowrap',
+  },
+  chartEmpty: {
+    alignSelf: 'center',
+    color: '#9aa7bd',
+    fontSize: '13px',
+    textAlign: 'center',
+    width: '100%',
   },
   bottomGrid: {
     display: 'grid',
@@ -668,13 +630,13 @@ const styles = {
     gap: '18px',
   },
   financeFocusPanel: {
-    background: '#1a2335',
-    border: '1px solid rgba(148, 163, 184, 0.12)',
-    borderRadius: '14px',
+    background: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '12px',
     padding: '22px',
   },
   financeFocusText: {
-    color: '#a7b0c8',
+    color: '#64748b',
     fontSize: '13px',
     margin: '12px 0 18px',
     maxWidth: '620px',
@@ -688,11 +650,11 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    border: '1px solid rgba(148, 163, 184, 0.16)',
-    borderRadius: '9px',
+    border: '1px solid #c7d2fe',
+    borderRadius: '8px',
     padding: '10px 13px',
-    background: 'rgba(99, 102, 241, 0.16)',
-    color: '#edf4ff',
+    background: '#eef2ff',
+    color: '#4338ca',
     cursor: 'pointer',
     fontWeight: 700,
     fontSize: '12px',
@@ -707,7 +669,7 @@ const styles = {
     gridTemplateColumns: '1.1fr 0.8fr 1fr 1.1fr 0.8fr',
     fontSize: '12px',
     fontWeight: 700,
-    color: '#9aa7bd',
+    color: '#64748b',
     padding: '0 4px',
   },
   tableRow: {
@@ -716,9 +678,9 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     fontSize: '13px',
-    color: '#f2f5fd',
+    color: '#334155',
     padding: '12px 4px',
-    borderTop: '1px solid rgba(148,163,184,0.12)',
+    borderTop: '1px solid #e2e8f0',
     width: '100%',
     borderLeft: 'none',
     borderRight: 'none',
@@ -747,7 +709,7 @@ const styles = {
     alignItems: 'flex-start',
     gap: '12px',
     padding: '8px 0',
-    borderLeft: '2px solid rgba(148,163,184,0.15)',
+    borderLeft: '2px solid #e2e8f0',
     paddingLeft: '12px',
     width: '100%',
     borderTop: 'none',
@@ -762,7 +724,7 @@ const styles = {
     width: '10px',
     height: '10px',
     borderRadius: '50%',
-    background: '#7dd3fc',
+    background: '#6366f1',
     marginTop: '7px',
   },
   activityBody: {
@@ -771,11 +733,11 @@ const styles = {
   activityText: {
     fontSize: '13px',
     lineHeight: '1.5',
-    color: '#edf4ff',
+    color: '#334155',
   },
   activityMeta: {
     fontSize: '11px',
-    color: '#9aa7bd',
+    color: '#64748b',
     marginTop: '4px',
   },
   helpBadge: {
@@ -802,10 +764,10 @@ const styles = {
   detailModal: {
     width: 'min(420px, 100%)',
     padding: '22px',
-    background: '#202b40',
-    border: '1px solid rgba(148, 163, 184, 0.22)',
-    borderRadius: '14px',
-    boxShadow: '0 24px 60px rgba(0, 0, 0, 0.38)',
+    background: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '12px',
+    boxShadow: '0 24px 60px rgba(15, 23, 42, 0.2)',
   },
   modalHeader: {
     display: 'flex',
@@ -813,19 +775,19 @@ const styles = {
     gap: '16px',
   },
   modalEyebrow: {
-    color: '#8bb8ff',
+    color: '#4f46e5',
     fontSize: '11px',
     fontWeight: 700,
     textTransform: 'uppercase',
   },
   modalTitle: {
     margin: '6px 0 0',
-    color: '#f3f6ff',
+    color: '#111827',
     fontSize: '18px',
   },
   modalDetails: {
     margin: '18px 0',
-    color: '#c1c9dc',
+    color: '#475569',
     fontSize: '14px',
     lineHeight: 1.5,
   },
@@ -834,8 +796,8 @@ const styles = {
     height: '30px',
     border: 'none',
     borderRadius: '50%',
-    background: 'rgba(148, 163, 184, 0.12)',
-    color: '#edf4ff',
+    background: '#f1f5f9',
+    color: '#475569',
     fontSize: '22px',
     cursor: 'pointer',
   },
@@ -843,10 +805,9 @@ const styles = {
     border: 'none',
     borderRadius: '8px',
     padding: '10px 14px',
-    background: '#67e8d4',
-    color: '#102532',
+    background: '#4f46e5',
+    color: '#ffffff',
     fontWeight: 700,
     cursor: 'pointer',
   },
 };
-

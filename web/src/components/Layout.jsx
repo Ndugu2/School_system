@@ -75,6 +75,7 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
     <div style={{ ...styles.appContainer, overflowX: 'hidden' }}>
       {/* Sidebar */}
       <aside
+        className="app-sidebar"
         style={{
           ...styles.sidebar,
           left: sidebarOpen ? 0 : '-280px',
@@ -82,10 +83,10 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
           width: isMobile ? 'min(280px, 85vw)' : 'var(--sidebar-width)',
         }}
       >
-        <div style={styles.sidebarHeader}>
+        <div className="app-sidebar-header" style={styles.sidebarHeader}>
           <div style={styles.logoContainer}>
             <div style={styles.logoIconWrap}>
-              <GraduationCap size={22} color="#f5c452" />
+              <GraduationCap size={22} color="var(--primary)" />
             </div>
             <span style={styles.logoText}>Ndugu portal</span>
           </div>
@@ -109,15 +110,16 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
               <button
                 key={item.id}
                 onClick={() => setCurrentTab(item.id)}
+                className={`app-nav-item${isActive ? ' is-active' : ''}`}
                 style={{
                   ...styles.navItem,
                   backgroundColor: isActive ? 'var(--primary-light)' : 'transparent',
-                  color: isActive ? 'var(--primary)' : '#1f2937',
+                  color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
                   fontWeight: isActive ? '700' : '500',
-                  border: isActive ? '1px solid rgba(124, 58, 237, 0.35)' : '1px solid transparent'
+                  border: '1px solid transparent'
                 }}
               >
-                <Icon size={18} style={{ color: isActive ? 'var(--primary)' : '#6b7280' }} />
+                <Icon size={18} style={{ color: isActive ? 'var(--primary)' : 'var(--text-tertiary)' }} />
                 <span>{item.label}</span>
               </button>
             );
@@ -159,12 +161,21 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
 
           <div className="app-header-right" style={styles.headerRight}>
             {/* Theme Toggle */}
-            <button onClick={toggleTheme} style={styles.iconBtn}>
+            <button
+              onClick={toggleTheme}
+              style={styles.iconBtn}
+              aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+              title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+            >
               {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
             </button>
 
             {/* Notification Badge */}
-            <button style={styles.iconBtn}>
+            <button
+              style={styles.iconBtn}
+              onClick={() => setCurrentTab('notifications')}
+              aria-label="Open notifications"
+            >
               <Bell size={20} />
             </button>
 
@@ -196,27 +207,27 @@ const styles = {
   appContainer: {
     display: 'flex',
     minHeight: '100vh',
-    backgroundColor: '#e8edf3',
+    backgroundColor: 'var(--bg-primary)',
   },
   sidebar: {
     position: 'fixed',
     top: 0,
     bottom: 0,
     width: 'var(--sidebar-width)',
-    backgroundColor: '#f5f7fa',
-    borderRight: '1px solid rgba(148, 163, 184, 0.25)',
+    backgroundColor: 'var(--bg-secondary)',
+    borderRight: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
     zIndex: 100,
     transition: 'var(--transition)',
   },
   sidebarHeader: {
-    height: '84px',
-    padding: '0 26px',
+    height: '72px',
+    padding: '0 22px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
+    borderBottom: '1px solid var(--border)',
   },
   logoContainer: {
     display: 'flex',
@@ -227,7 +238,7 @@ const styles = {
     fontSize: '20px',
     fontWeight: '800',
     letterSpacing: '-0.5px',
-    color: '#1f2937',
+    color: 'var(--text-primary)',
   },
   closeSidebarBtn: {
     display: 'none', // Shown only on mobile screens
@@ -237,10 +248,10 @@ const styles = {
     cursor: 'pointer',
   },
   navigation: {
-    padding: '22px 18px',
+    padding: '18px 14px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '6px',
+    gap: '4px',
     flex: 1,
     overflowY: 'auto',
   },
@@ -255,7 +266,7 @@ const styles = {
     textAlign: 'left',
     width: '100%',
     transition: 'var(--transition)',
-    fontSize: '16px',
+    fontSize: '14px',
     backgroundColor: 'transparent',
     ':hover': {
       backgroundColor: 'var(--bg-tertiary)',
@@ -289,16 +300,16 @@ const styles = {
     flexDirection: 'column',
     minHeight: '100vh',
     transition: 'var(--transition)',
-    backgroundColor: '#e8edf3',
+    backgroundColor: 'var(--bg-primary)',
   },
   header: {
-    height: '84px',
-    backgroundColor: '#1a2434',
-    borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
+    height: '72px',
+    backgroundColor: 'var(--bg-secondary)',
+    borderBottom: '1px solid var(--border)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '0 26px 0 18px',
+    padding: '0 30px 0 24px',
     position: 'sticky',
     top: 0,
     zIndex: 90,
@@ -309,9 +320,9 @@ const styles = {
     gap: '18px',
   },
   menuToggleBtn: {
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(148, 163, 184, 0.2)',
-    color: '#edf4ff',
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border)',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
@@ -323,7 +334,7 @@ const styles = {
   pageTitle: {
     fontSize: '20px',
     fontWeight: '700',
-    color: '#f8fafc',
+    color: 'var(--text-primary)',
   },
   headerRight: {
     display: 'flex',
@@ -331,9 +342,9 @@ const styles = {
     gap: '14px',
   },
   iconBtn: {
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(148, 163, 184, 0.2)',
-    color: '#edf4ff',
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border)',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
@@ -350,13 +361,13 @@ const styles = {
     alignItems: 'center',
     gap: '12px',
     paddingLeft: '10px',
-    borderLeft: '1px solid rgba(148, 163, 184, 0.2)',
+    borderLeft: '1px solid var(--border)',
   },
   avatarPlaceholder: {
     width: '36px',
     height: '36px',
     borderRadius: '50%',
-    backgroundColor: '#7c3aed',
+    backgroundColor: 'var(--primary)',
     color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
@@ -372,19 +383,19 @@ const styles = {
   profileName: {
     fontSize: '15px',
     fontWeight: '700',
-    color: '#edf4ff',
+    color: 'var(--text-primary)',
   },
   profileRole: {
     fontSize: '11px',
-    color: '#c9d1df',
+    color: 'var(--text-tertiary)',
     fontWeight: '700',
     letterSpacing: '0.5px',
     textTransform: 'uppercase',
   },
   contentBody: {
-    padding: '26px 28px 30px',
+    padding: '28px 32px 36px',
     flex: 1,
     overflowY: 'auto',
-    backgroundColor: '#e8edf3',
+    backgroundColor: 'var(--bg-primary)',
   }
 };

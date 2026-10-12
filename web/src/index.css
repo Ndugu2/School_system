@@ -164,6 +164,173 @@ img, svg, canvas, video {
   animation: fadeIn 0.4s ease-out forwards;
 }
 
+.app-sidebar-header {
+  background: var(--bg-secondary);
+}
+
+.app-nav-item {
+  position: relative;
+  min-height: 42px;
+  border-radius: 8px !important;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease !important;
+}
+
+.app-nav-item:hover {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+
+.app-nav-item.is-active {
+  background-color: var(--primary-light) !important;
+  border-color: transparent !important;
+  color: var(--primary) !important;
+}
+
+.app-nav-item.is-active::before {
+  position: absolute;
+  inset: 8px auto 8px 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--primary);
+  content: '';
+}
+
+.app-header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.app-header button,
+.dashboard-shell button {
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.app-header button:focus-visible,
+.app-nav-item:focus-visible,
+.dashboard-shell button:focus-visible,
+.app-content-body input:focus-visible,
+.app-content-body select:focus-visible,
+.app-content-body textarea:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.app-content-body > .animate-fade-in {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+.app-content-body input:not([type='checkbox']):not([type='radio']),
+.app-content-body select,
+.app-content-body textarea {
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.app-content-body input::placeholder,
+.app-content-body textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.dashboard-shell {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.dashboard-shell .statCard,
+.dashboard-shell .dashboard-panel {
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.dashboard-shell .statCard:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 8px 20px rgba(30, 41, 59, 0.08);
+  transform: translateY(-1px);
+}
+
+.dashboard-shell .dashboard-panel {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.dashboard-shell .dashboard-table-row:hover,
+.dashboard-shell .activityItem:hover {
+  background: #f8fafc;
+}
+
+.dashboard-shell .searchResult:hover,
+.dashboard-shell .quickActions button:hover {
+  background: #f1f5f9;
+}
+
+[data-theme='dark'] .app-sidebar,
+[data-theme='dark'] .app-sidebar-header,
+[data-theme='dark'] .app-header {
+  background-color: var(--bg-secondary);
+}
+
+[data-theme='dark'] .app-nav-item:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+[data-theme='dark'] .dashboard-shell {
+  color: var(--text-primary) !important;
+}
+
+[data-theme='dark'] .dashboard-shell .dashboard-top-bar,
+[data-theme='dark'] .dashboard-shell .dashboard-stat-card,
+[data-theme='dark'] .dashboard-shell .dashboard-panel,
+[data-theme='dark'] .dashboard-shell .finance-focus-panel,
+[data-theme='dark'] .dashboard-shell .dashboard-detail-modal {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border) !important;
+}
+
+[data-theme='dark'] .dashboard-shell .dashboard-stat-title,
+[data-theme='dark'] .dashboard-shell .dashboard-panel-title,
+[data-theme='dark'] .dashboard-shell .dashboard-stat-value,
+[data-theme='dark'] .dashboard-shell .dashboard-modal-title,
+[data-theme='dark'] .dashboard-shell .dashboard-modal-details,
+[data-theme='dark'] .dashboard-shell .tableRow,
+[data-theme='dark'] .dashboard-shell .dashboard-activity-text,
+[data-theme='dark'] .dashboard-shell .dashboard-search-input {
+  color: var(--text-primary) !important;
+}
+
+[data-theme='dark'] .dashboard-shell .searchBox,
+[data-theme='dark'] .dashboard-shell .dashboard-search-box,
+[data-theme='dark'] .dashboard-shell .userChip,
+[data-theme='dark'] .dashboard-shell .iconBtn,
+[data-theme='dark'] .dashboard-shell .quickActions,
+[data-theme='dark'] .dashboard-shell .searchResults {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border) !important;
+}
+
+[data-theme='dark'] .dashboard-shell .dashboard-welcome {
+  background: linear-gradient(115deg, #1e1b4b 0%, #172554 100%) !important;
+  border-color: #3730a3 !important;
+}
+
+[data-theme='dark'] .dashboard-shell .dashboard-welcome-title {
+  color: #ffffff !important;
+}
+
+[data-theme='dark'] .dashboard-shell .dashboard-welcome-eyebrow,
+[data-theme='dark'] .dashboard-shell .dashboard-welcome-text,
+[data-theme='dark'] .dashboard-shell .dashboard-modal-eyebrow,
+[data-theme='dark'] .dashboard-shell .dashboard-panel-icon,
+[data-theme='dark'] .dashboard-shell .dashboard-bar-value,
+[data-theme='dark'] .dashboard-shell .dashboard-bar-label,
+[data-theme='dark'] .dashboard-shell .dashboard-activity-meta,
+[data-theme='dark'] .dashboard-shell .tableHead {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme='dark'] .dashboard-shell .dashboard-panel-icon {
+  background: var(--bg-tertiary) !important;
+}
+
 @media (max-width: 1024px) {
   .app-header {
     padding: 0 20px !important;
