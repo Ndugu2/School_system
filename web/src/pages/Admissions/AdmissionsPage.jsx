@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  CheckCircle, FileText, Sparkles, Send, Phone, Mail, 
+  CheckCircle, FileText, Send, Phone, Mail, 
   MapPin, HelpCircle, ArrowRight, ShieldCheck, Download,
   Clock, AlertCircle, X, Search, School, UserCheck, HeartHandshake,
   BookOpen, Award, Printer, UploadCloud, Eye
@@ -51,9 +51,9 @@ export default function AdmissionsPage() {
     second_contact_number: '',
     second_occupation: '',
     second_email: '',
-    // Academic Selection
-    combination_name: 'PCM / ICT',
-    selected_subjects: ['English Language', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Geography', 'History & Political Education']
+    // Academic Selection (populated from DB via /meta/options)
+    combination_name: '',
+    selected_subjects: []
   });
 
   // Academic Documents State (PDFs)
@@ -68,6 +68,7 @@ export default function AdmissionsPage() {
   // Dynamic Options from Backend
   const [combinationsList, setCombinationsList] = useState([]);
   const [subjectsList, setSubjectsList] = useState([]);
+  const [classesList, setClassesList] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(null);
   const [submitError, setSubmitError] = useState(null);
@@ -79,33 +80,82 @@ export default function AdmissionsPage() {
   const [trackingError, setTrackingError] = useState(null);
   const [showLetterModal, setShowLetterModal] = useState(false);
 
-  // Fetch combinations and subjects on mount
+  // Fetch classes, subjects and A-Level combinations from the database
   useEffect(() => {
+    let cancelled = false;
+
     fetch(`${API_URL}/student-applications/meta/options`)
       .then(res => res.json())
       .then(data => {
-        if (data.combinations) setCombinationsList(data.combinations);
-        if (data.subjects) setSubjectsList(data.subjects);
+        if (cancelled) return;
+
+        const combos = data.combinations || [];
+        const subjects = data.subjects || [];
+        const classes = data.classes || [];
+
+        setCombinationsList(combos);
+        setSubjectsList(subjects);
+        setClassesList(classes);
+
+        setFormData(prev => {
+          const next = { ...prev };
+
+          // Default combination = first combination in the database
+          if (!next.combination_name && combos.length > 0) {
+            next.combination_name = combos[0].name;
+          }
+
+          // Keep the selected curriculum/class valid for the DB class list
+          if (classes.length > 0 && !classes.some(c => c.curriculum === next.level)) {
+            next.level = classes[0].curriculum;
+          }
+          const classesForLevel = classes.filter(c => c.curriculum === next.level);
+          if (classesForLevel.length > 0 && !classesForLevel.some(c => c.level === next.class_applying)) {
+            next.class_applying = classesForLevel[0].level;
+          }
+
+          // Default O-Level subjects = compulsory subjects defined in the database
+          if (next.selected_subjects.length === 0) {
+            next.selected_subjects = subjects
+              .filter(s => s.level === 'O' && s.isCompulsory)
+              .map(s => s.name);
+          }
+
+          return next;
+        });
       })
-      .catch(err => console.log('Meta options fetch fallback:', err));
+      .catch(err => console.log('Meta options fetch failed:', err));
+
+    return () => { cancelled = true; };
   }, []);
 
-  // Sync level with class_applying
+  // Curriculum levels available in the classes collection
+  const availableLevels = [...new Set(classesList.map(c => c.curriculum))];
+
+  const curriculumLabel = (curriculum) => {
+    const levels = classesList.filter(c => c.curriculum === curriculum).map(c => c.level);
+    const name = curriculum === 'O'
+      ? 'O-Level (Lower Secondary CBC)'
+      : 'A-Level (Upper Secondary UACE)';
+    return levels.length > 0 ? `${name}: ${levels[0]} - ${levels[levels.length - 1]}` : name;
+  };
+
+  // Sync level with class_applying using the DB class list
   const handleLevelChange = (newLevel) => {
-    const defaultClass = newLevel === 'O' ? 'S1' : 'S5';
+    const firstClass = classesList.find(c => c.curriculum === newLevel);
     setFormData(prev => ({
       ...prev,
       level: newLevel,
-      class_applying: defaultClass
+      class_applying: firstClass ? firstClass.level : prev.class_applying
     }));
   };
 
   const handleClassChange = (newClass) => {
-    const derivedLevel = ['S1', 'S2', 'S3', 'S4'].includes(newClass) ? 'O' : 'A';
+    const selectedClass = classesList.find(c => c.level === newClass);
     setFormData(prev => ({
       ...prev,
       class_applying: newClass,
-      level: derivedLevel
+      level: selectedClass ? selectedClass.curriculum : prev.level
     }));
   };
 
@@ -298,10 +348,6 @@ export default function AdmissionsPage() {
       <section className="ug-hero" style={{ padding: '70px 48px 60px' }}>
         <div className="ug-hero-inner" style={{ gridTemplateColumns: '1fr', maxWidth: '1100px' }}>
           <div>
-            <div className="ug-hero-tag">
-              <Sparkles size={14} color="#c59b27" />
-              <span>Admissions Office &bull; 2026 Academic Year Intake &bull; S1 to S6</span>
-            </div>
             <h1 className="ug-hero-title" style={{ fontSize: '48px', marginBottom: '18px' }}>
               Student Admissions &amp; <span>Application Portal</span>
             </h1>
@@ -399,14 +445,18 @@ export default function AdmissionsPage() {
                       setSubmitSuccess(null);
                       setFormData({
                         first_name: '', last_name: '', date_of_birth: '', gender: 'M',
-                        level: 'O', class_applying: 'S1', former_school: '', place_of_residence: '',
+                        level: classesList[0]?.curriculum || 'O',
+                        class_applying: classesList.find(c => c.curriculum === (classesList[0]?.curriculum || 'O'))?.level || '',
+                        former_school: '', place_of_residence: '',
                         place_of_origin: '', district: '', county: '', sub_county: '', village: '',
                         chronic_disease: '', parent_first_name: '', parent_last_name: '',
                         relation: 'Father', contact_number: '', occupation: '', email: '',
                         has_second_parent: false, second_parent_first_name: '', second_parent_last_name: '',
                         second_relation: 'Mother', second_contact_number: '', second_occupation: '', second_email: '',
-                        combination_name: 'PCM / ICT',
-                        selected_subjects: ['English Language', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Geography', 'History & Political Education']
+                        combination_name: combinationsList[0]?.name || '',
+                        selected_subjects: subjectsList
+                          .filter(s => s.level === 'O' && s.isCompulsory)
+                          .map(s => s.name)
                       });
                     }} 
                     className="btn-hero-ug-outline"
@@ -516,8 +566,14 @@ export default function AdmissionsPage() {
                         onChange={e => handleLevelChange(e.target.value)}
                         style={{ backgroundColor: '#080e1a', border: 'none', borderRadius: '10px', padding: '13px 16px', color: '#fff', fontSize: '15px' }}
                       >
-                        <option value="O">O-Level (Lower Secondary CBC: S1 - S4)</option>
-                        <option value="A">A-Level (Upper Secondary UACE: S5 - S6)</option>
+                        {availableLevels.length === 0 && (
+                          <option value={formData.level}>Loading levels…</option>
+                        )}
+                        {availableLevels.map(curriculum => (
+                          <option key={curriculum} value={curriculum}>
+                            {curriculumLabel(curriculum)}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
@@ -528,19 +584,16 @@ export default function AdmissionsPage() {
                         onChange={e => handleClassChange(e.target.value)}
                         style={{ backgroundColor: '#080e1a', border: 'none', borderRadius: '10px', padding: '13px 16px', color: '#fff', fontSize: '15px' }}
                       >
-                        {formData.level === 'O' ? (
-                          <>
-                            <option value="S1">Senior 1 (S.1)</option>
-                            <option value="S2">Senior 2 (S.2)</option>
-                            <option value="S3">Senior 3 (S.3)</option>
-                            <option value="S4">Senior 4 (S.4)</option>
-                          </>
-                        ) : (
-                          <>
-                            <option value="S5">Senior 5 (S.5)</option>
-                            <option value="S6">Senior 6 (S.6)</option>
-                          </>
+                        {classesList.length === 0 && (
+                          <option value={formData.class_applying}>Loading classes…</option>
                         )}
+                        {classesList
+                          .filter(c => c.curriculum === formData.level)
+                          .map(c => (
+                            <option key={c._id || c.level} value={c.level}>
+                              {c.name && c.name !== c.level ? `${c.name} (${c.level})` : c.level}
+                            </option>
+                          ))}
                       </select>
                     </div>
                   </div>
@@ -556,14 +609,11 @@ export default function AdmissionsPage() {
                         onChange={e => setFormData({ ...formData, combination_name: e.target.value })}
                         style={{ width: '100%', backgroundColor: '#131f37', border: 'none', borderRadius: '10px', padding: '14px 16px', color: '#fff', fontSize: '15px', marginBottom: '10px' }}
                       >
-                        <option value="PCM / ICT">PCM / ICT — Physics, Chemistry, Mathematics + ICT + General Paper</option>
-                        <option value="BCM / Sub-Math">BCM / Sub-Math — Biology, Chemistry, Mathematics + Sub-Math + General Paper</option>
-                        <option value="PCB / Sub-Math">PCB / Sub-Math — Physics, Chemistry, Biology + Sub-Math + General Paper</option>
-                        <option value="HEL / Divinity">HEL / Divinity — History, Economics, Literature in English + Divinity + General Paper</option>
-                        <option value="MEG / Sub-Math">MEG / Sub-Math — Mathematics, Economics, Geography + Sub-Math + General Paper</option>
-                        <option value="HEG / Sub-Math">HEG / Sub-Math — History, Economics, Geography + Sub-Math + General Paper</option>
-                        <option value="DEG / Sub-Math">DEG / Sub-Math — Divinity, Economics, Geography + Sub-Math + General Paper</option>
-                        <option value="PEM / ICT">PEM / ICT — Physics, Economics, Mathematics + ICT + General Paper</option>
+                        {combinationsList.map(combo => (
+                          <option key={combo._id || combo.name} value={combo.name}>
+                            {combo.name}{combo.description ? ` — ${combo.description}` : ''}
+                          </option>
+                        ))}
                       </select>
                       <div style={{ fontSize: '13px', color: '#94a3b8' }}>
                         Requires credit passes in respective O-Level subject prerequisites for UNEB registration.
@@ -576,22 +626,23 @@ export default function AdmissionsPage() {
                         O-Level Curriculum Subjects (CBC Competency Learning)
                       </label>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
-                        {[
-                          'English Language', 'Mathematics', 'Physics', 'Chemistry', 'Biology',
-                          'Geography', 'History & Political Education', 'Christian Religious Education',
-                          'Islamic Religious Education', 'Information & Comm. Technology', 'Agriculture',
-                          'Entrepreneurship', 'Literature in English', 'Kiswahili', 'Fine Art'
-                        ].map(sub => {
+                        {subjectsList.filter(s => s.level === 'O').map(s => {
+                          const sub = s.name;
                           const isChecked = formData.selected_subjects.includes(sub);
                           return (
-                            <label key={sub} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#cbd5e1', cursor: 'pointer', padding: '8px 12px', backgroundColor: isChecked ? '#131f37' : 'transparent', borderRadius: '8px' }}>
+                            <label key={s._id || sub} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#cbd5e1', cursor: 'pointer', padding: '8px 12px', backgroundColor: isChecked ? '#131f37' : 'transparent', borderRadius: '8px' }}>
                               <input 
                                 type="checkbox" 
                                 checked={isChecked}
                                 onChange={() => toggleSubject(sub)}
                                 style={{ accentColor: '#c59b27' }}
                               />
-                              <span>{sub}</span>
+                              <span>
+                                {sub}
+                                {s.isCompulsory && (
+                                  <span style={{ marginLeft: '6px', fontSize: '10.5px', fontWeight: 800, color: '#c59b27', textTransform: 'uppercase' }}>core</span>
+                                )}
+                              </span>
                             </label>
                           );
                         })}
@@ -851,7 +902,7 @@ export default function AdmissionsPage() {
                   </div>
 
                   {/* Informational Guidance Notice tailored to selected class */}
-                  <div style={{ backgroundColor: '#080e1a', padding: '16px 20px', borderRadius: '12px', marginBottom: '22px', borderLeft: '4px solid #c59b27' }}>
+                  <div style={{ backgroundColor: '#080e1a', padding: '16px 20px', borderRadius: '12px', marginBottom: '22px' }}>
                     <div style={{ fontSize: '14px', fontWeight: 700, color: '#d8b257', marginBottom: '4px' }}>
                       Documentation Requirements for {formData.class_applying} ({formData.level === 'O' ? 'Ordinary Level' : 'Advanced Level'}):
                     </div>

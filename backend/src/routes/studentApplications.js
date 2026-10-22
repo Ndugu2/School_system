@@ -213,9 +213,10 @@ router.get('/track/:reference', async (req, res) => {
 // ── 3. PUBLIC / PROTECTED: List A-Level Combinations & Subjects ───────────────
 router.get('/meta/options', async (req, res) => {
   try {
-    const [combinations, subjects] = await Promise.all([
+    const [combinations, subjects, classes] = await Promise.all([
       ALevelCombination.find().sort({ name: 1 }),
-      Subject.find({ isActive: true }).select('name code level isCompulsory department')
+      Subject.find({ isActive: true }).select('name code level isCompulsory department'),
+      Class.find({ isActive: true }).select('name level streams').sort({ level: 1 })
     ]);
 
     // Default combinations if database has none seeded
@@ -248,9 +249,26 @@ router.get('/meta/options', async (req, res) => {
       { name: 'Fine Art', code: 'ART', level: 'O', isCompulsory: false, department: 'Technical' }
     ];
 
+    // Default classes if the classes collection is empty
+    const defaultClasses = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'].map((level) => ({
+      name: `Senior ${level.slice(1)}`,
+      level
+    }));
+
+    // Curriculum (O/A) is derived from the class level so the form never hardcodes S1–S6
+    const curriculumFor = (level) => (['S5', 'S6'].includes(level) ? 'A' : 'O');
+    const resolvedClasses = (classes.length > 0 ? classes : defaultClasses).map((c) => ({
+      _id: c._id,
+      name: c.name,
+      level: c.level,
+      curriculum: curriculumFor(c.level),
+      streams: (c.streams || []).map((s) => s.name)
+    }));
+
     res.json({
       combinations: combinations.length > 0 ? combinations : defaultCombinations,
-      subjects: (subjects && subjects.length > 0) ? subjects : defaultSubjects
+      subjects: (subjects && subjects.length > 0) ? subjects : defaultSubjects,
+      classes: resolvedClasses
     });
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
