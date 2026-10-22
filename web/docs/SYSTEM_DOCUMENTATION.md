@@ -63,6 +63,7 @@ The system features a dual assessment engine specifically built for the Ugandan 
   * `1.0 - 1.4`: Basic
   * `1.5 - 2.4`: Moderate
   * `2.5 - 3.0`: Outstanding
+* **AOI → Competency mapping (project heuristic)**: The report-card generator derives the 1–3 AOI score from the recorded percentage average as `(avgPct / 100) × 3` (clamped to `1–3`). Where no AOI/coursework/assignment result exists, it falls back to the End-of-Term percentage using the same conversion. This is a heuristic for workflows that store percentages only — the authoritative basis is the **NCDC SBA Implementation Guide**. If your school always records 1–3 AOI scores directly, the heuristic path is a no-op.
 * **Generic Skills Evaluation**: Evaluation of Critical Thinking, Communication, Innovation, and Teamwork.
 * **UNEB Export**: One-click export into the official UNEB e-Registration / SBA format.
 

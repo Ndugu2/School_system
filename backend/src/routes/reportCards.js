@@ -1,5 +1,4 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
 const router = express.Router();
 
 const Student = require('../models/Student');
@@ -7,49 +6,39 @@ const Class = require('../models/Class');
 const User = require('../models/User');
 const ExamResult = require('../models/ExamResult');
 const Registration = require('../models/Registration');
-const Subject = require('../models/Subject');
+const ReportVerification = require('../models/ReportVerification');
 const { protect, authorize } = require('../middleware/auth');
 const { canAccessStudent } = require('../middleware/recordAccess');
 const ReportCardGenerator = require('../services/reportCardGenerator');
+const { uaceGrade, competencyLabel, computeUACEAggregate } = require('../services/grading');
 
 const REPORT_ROLES = ['super-admin', 'admin', 'supervisor', 'deputy-head', 'director-of-studies', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent'];
-
-const COMPETENCY_SCALE = [
-  { label: 'Basic', min: 1.0, max: 1.49 },
-  { label: 'Moderate', min: 1.5, max: 2.49 },
-  { label: 'Outstanding', min: 2.5, max: 3.0 },
-];
-
-const competencyLabel = (score) => {
-  const found = COMPETENCY_SCALE.find(c => score >= c.min && score <= c.max);
-  return found ? found.label : (score > 3 ? 'Outstanding' : 'Basic');
-};
-
-// UACE 20-point grading scale
-const uaceGrade = (percentage) => {
-  if (percentage >= 80) return { letter: 'A', points: 6 };
-  if (percentage >= 70) return { letter: 'B', points: 5 };
-  if (percentage >= 60) return { letter: 'C', points: 4 };
-  if (percentage >= 50) return { letter: 'D', points: 3 };
-  if (percentage >= 40) return { letter: 'E', points: 2 };
-  if (percentage >= 35) return { letter: 'O', points: 1 };
-  return { letter: 'F', points: 0 };
-};
+const REVOKE_ROLES = ['super-admin', 'admin', 'deputy-head', 'director-of-studies', 'academic-admin'];
 
 const toNumber = (v) => {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : 0;
 };
 
-// ── Build verification token for the QR code ──────────────────────────────
-const buildVerificationToken = (payload) => {
-  const secret = process.env.JWT_SECRET || 'school-system-report-verify';
-  return jwt.sign(payload, secret, { expiresIn: '365d' });
-};
+const REPORT_API_BASE = () => process.env.FRONTEND_URL || 'http://localhost:5000/api';
 
-const buildVerifyUrl = (token) => {
-  const base = process.env.FRONTEND_URL || 'http://localhost:5000/api';
-  return `${base}/report-cards/verify/${token}`;
+// QR payload: only a random verification ID, never student PII.
+// /verify resolves the ID to the persisted ReportVerification record,
+// so a report can be re-verified, revoked, or audited server-side.
+const buildVerifyUrl = (verificationId) => `${REPORT_API_BASE()}/report-cards/verify/${verificationId}`;
+
+// ── Prefer stored comments (teacher/headteacher) over generated defaults ────
+const loadStoredComments = async (studentId, term, academicYear) => {
+  const record = await ReportVerification.findOne({ student: studentId, term, academicYear })
+    .sort({ createdAt: -1 })
+    .select('comments');
+  if (record?.comments?.classTeacher || record?.comments?.headTeacher) {
+    return {
+      classTeacher: record.comments.classTeacher || '',
+      headTeacher: record.comments.headTeacher || '',
+    };
+  }
+  return null;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -78,6 +67,8 @@ const getHeadTeacher = async () => {
   return ht?.name || 'Headteacher';
 };
 
+// Fallback comments applied ONLY when no recorded teacher/headteacher comment
+// exists for that student + term + academic year.
 const buildDefaultComments = (avg) => {
   if (avg >= 80) return { classTeacher: 'Excellent performance. Keep up the outstanding work!', headTeacher: 'An exemplary student. Highly recommended.' };
   if (avg >= 65) return { classTeacher: 'Very good performance. Continue striving for excellence.', headTeacher: 'A diligent and reliable learner.' };
@@ -86,6 +77,18 @@ const buildDefaultComments = (avg) => {
 };
 
 // ── NCDC (S1–S4) data assembly ─────────────────────────────────────────────
+//
+// Assessment model (see web/docs/SYSTEM_DOCUMENTATION.md → Curriculum & Assessment Engine):
+//   SBA (20%) = (Average AOI Score / 3) × 20
+//   Summative (80%) = End-of-Term percentage scaled to /80
+//   Final (100%) = SBA + Summative
+//   Competency bands: 1.0–1.4 Basic, 1.5–2.4 Moderate, 2.5–3.0 Outstanding
+//
+// NOTE — percentage→AOI conversion & EOT fallback: when an AOI score (1–3)
+// is not recorded but percentage exams are, we derive a provisional AOI score
+// as (avgPct/100)×3. This is a project-defined heuristic for systems that only
+// record percentages; the authoritative source is the NCDC SBA Implementation
+// Guide. Flag it if your workflows always record AOI scores.
 const buildNCDCData = async (student, term, academicYear, results) => {
   const { className, streamName, classTeacherName } = await resolveClassMeta(student);
   const headTeacherName = await getHeadTeacher();
@@ -105,7 +108,7 @@ const buildNCDCData = async (student, term, academicYear, results) => {
     const eot = rs.find(r => ['EOT', 'mock'].includes(r.examType));
     const aoiResults = rs.filter(r => ['coursework', 'assignment', 'AOI'].includes(r.examType));
 
-    // AOI score on 1-3 scale
+    // AOI score on 1-3 scale (see NOTE above about the heuristic when AOI is absent)
     let aoiScore = null;
     if (aoiResults.length > 0) {
       const avgPct = (aoiResults.reduce((s, r) => s + (r.percentage || 0), 0) / aoiResults.length);
@@ -147,7 +150,7 @@ const buildNCDCData = async (student, term, academicYear, results) => {
     { name: 'Teamwork', score: aoiAvg, descriptor: competencyLabel(aoiAvg) },
   ].map(s => ({ ...s, score: Math.min(3, s.score || 1) }));
 
-  const comments = buildDefaultComments(finalAvg);
+  const comments = (await loadStoredComments(student._id, term, academicYear)) || buildDefaultComments(finalAvg);
 
   return {
     reportType: 'ncdc',
@@ -188,8 +191,6 @@ const buildUACEData = async (student, term, academicYear, results) => {
   }
 
   const uaceSubjects = [];
-  const principalPoints = [];
-  let gpPass = 0, subsidiaryPass = 0;
 
   for (const { subject, results: rs } of bySubject) {
     const primary = rs.find(r => ['EOT', 'mock', 'BOT', 'MOT'].includes(r.examType)) || rs[0];
@@ -207,15 +208,11 @@ const buildUACEData = async (student, term, academicYear, results) => {
       letterGrade: letter,
       points,
     });
-
-    if (type === 'subsidiary') subsidiaryPass = points > 0 ? 1 : 0;
-    else if (type === 'general') gpPass = points > 0 ? 1 : 0;
-    else principalPoints.push(points);
   }
 
-  // Best 3 principal subjects + General Paper (1) + Subsidiary (1)
-  const best3 = principalPoints.sort((a, b) => b - a).slice(0, 3);
-  const total = Math.min(20, best3.reduce((s, p) => s + p, 0) + gpPass + subsidiaryPass);
+  const aggregate = computeUACEAggregate(
+    uaceSubjects.map(s => ({ type: s.type, points: s.points }))
+  );
 
   const combinationLabelParts = uaceSubjects
     .filter(s => s.type === 'principal')
@@ -226,7 +223,7 @@ const buildUACEData = async (student, term, academicYear, results) => {
     ? Math.round((uaceSubjects.reduce((s, r) => s + r.percentage, 0) / uaceSubjects.length) * 10) / 10
     : 0;
 
-  const comments = buildDefaultComments(avg);
+  const comments = (await loadStoredComments(student._id, term, academicYear)) || buildDefaultComments(avg);
 
   return {
     reportType: 'uace',
@@ -246,11 +243,46 @@ const buildUACEData = async (student, term, academicYear, results) => {
     comments,
     combination: { name: combinationCode || '—', label: combinationLabel },
     uaceSubjects,
-    aggregate: {
-      total,
-      outOf: 20,
-      breakdown: `Best 3 Principal (${best3.join(' + ')}) + General Paper (${gpPass}) + Subsidiary (${subsidiaryPass})`,
+    aggregate,
+  };
+};
+
+// ── Persist a verification record; returns { id, url, snapshot } ────────────
+const createVerification = async ({ student, term, academicYear, reportData, issuedBy, commentOverride }) => {
+  const finalMark = reportData.reportType === 'ncdc'
+    ? reportData.averages?.finalAvg ?? null
+    : null;
+  const aggregatePoints = reportData.reportType === 'uace'
+    ? reportData.aggregate?.total ?? null
+    : null;
+
+  const record = await ReportVerification.create({
+    verificationId: ReportVerification.generateVerificationId(),
+    student: student._id,
+    studentName: reportData.student?.name,
+    classLevel: reportData.student?.classLevel,
+    term,
+    academicYear,
+    reportType: reportData.reportType,
+    snapshot: {
+      studentName: reportData.student?.name,
+      classLevel: reportData.student?.classLevel,
+      term,
+      academicYear,
+      reportType: reportData.reportType,
+      finalMark,
+      aggregate: aggregatePoints,
     },
+    comments: commentOverride && (commentOverride.classTeacher || commentOverride.headTeacher)
+      ? commentOverride
+      : undefined,
+    issuedBy,
+  });
+
+  return {
+    id: record.verificationId,
+    url: buildVerifyUrl(record.verificationId),
+    record,
   };
 };
 
@@ -293,17 +325,26 @@ router.get('/:studentId/:term/pdf', protect, authorize(...REPORT_ROLES), async (
       ? await buildUACEData(student, term, academicYear, results)
       : await buildNCDCData(student, term, academicYear, results);
 
-    // Verification QR
-    const token = buildVerificationToken({
-      studentId: student._id.toString(),
-      studentName: student.user?.name,
-      classLevel: level,
+    // Staff may supply recorded comments via query params (preferred over defaults).
+    let commentOverride = null;
+    if (!['student', 'parent'].includes(req.user.role)) {
+      const cc = (req.query.classTeacherComment || '').trim();
+      const ht = (req.query.headTeacherComment || '').trim();
+      if (cc || ht) commentOverride = { classTeacher: cc, headTeacher: ht };
+    }
+    if (commentOverride) reportData.comments = commentOverride;
+
+    // Persist verification record; QR embeds ONLY the random ID (no PII).
+    const verification = await createVerification({
+      student,
       term,
       academicYear,
-      type: reportData.reportType,
+      reportData,
+      issuedBy: req.user?._id,
+      commentOverride,
     });
     reportData.verification = {
-      token: buildVerifyUrl(token),
+      token: verification.url,
       note: 'Present to school office to verify authenticity.',
     };
 
@@ -350,15 +391,12 @@ router.get('/:studentId/:term/json', protect, authorize(...REPORT_ROLES), async 
       ? await buildUACEData(student, term, academicYear, results)
       : await buildNCDCData(student, term, academicYear, results);
 
-    const token = buildVerificationToken({
-      studentId: student._id.toString(),
-      studentName: student.user?.name,
-      classLevel: level,
-      term,
-      academicYear,
-      type: reportData.reportType,
-    });
-    reportData.verification = { token: buildVerifyUrl(token) };
+    // Revalidate against the persisted verification record if one exists.
+    const existing = await ReportVerification.findOne({ student: studentId, term, academicYear })
+      .sort({ createdAt: -1 });
+    reportData.verification = existing
+      ? { token: buildVerifyUrl(existing.verificationId), status: existing.status }
+      : null;
 
     res.json(reportData);
   } catch (error) {
@@ -368,16 +406,59 @@ router.get('/:studentId/:term/json', protect, authorize(...REPORT_ROLES), async 
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  GET /api/report-cards/verify/:token
-//  Verify authenticity of a report card via its QR code
+//  Verify authenticity of a report card via its QR code.
+//  Resolves the random ID to the persisted record (revoke-aware).
 // ═══════════════════════════════════════════════════════════════════════════
 router.get('/verify/:token', async (req, res) => {
   const { token } = req.params;
   try {
-    const secret = process.env.JWT_SECRET || 'school-system-report-verify';
-    const payload = jwt.verify(token, secret);
-    return res.json({ valid: true, report: payload });
+    const record = await ReportVerification.findOne({ verificationId: token });
+    if (!record) {
+      return res.status(404).json({ valid: false, message: 'Verification ID not found' });
+    }
+    if (record.status !== 'active') {
+      return res.status(400).json({ valid: false, message: 'This report has been revoked', revokedAt: record.revokedAt });
+    }
+
+    const { snapshot } = record;
+    return res.json({
+      valid: true,
+      report: {
+        studentName: snapshot.studentName,
+        classLevel: snapshot.classLevel,
+        term: snapshot.term,
+        academicYear: snapshot.academicYear,
+        reportType: snapshot.reportType,
+        finalMark: snapshot.finalMark,
+        aggregate: snapshot.aggregate,
+      },
+      issuedAt: record.createdAt,
+    });
   } catch (err) {
-    return res.status(400).json({ valid: false, message: 'Invalid or expired verification code' });
+    return res.status(400).json({ valid: false, message: 'Invalid verification data' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PATCH /api/report-cards/verify/:token
+//  Revoke a report (e.g. results amended or issued in error).
+// ═══════════════════════════════════════════════════════════════════════════
+router.patch('/verify/:token', protect, authorize(...REVOKE_ROLES), async (req, res) => {
+  const { token } = req.params;
+  try {
+    const record = await ReportVerification.findOne({ verificationId: token });
+    if (!record) return res.status(404).json({ error: { message: 'Verification ID not found' } });
+    if (record.status !== 'active') return res.status(400).json({ error: { message: 'Report is already revoked' } });
+
+    record.status = 'revoked';
+    record.revokedAt = new Date();
+    record.revokedBy = req.user?._id || null;
+    record.reason = (req.body?.reason || '').trim();
+    await record.save();
+
+    res.json({ success: true, verificationId: record.verificationId, status: 'revoked' });
+  } catch (error) {
+    res.status(500).json({ error: { message: error.message } });
   }
 });
 

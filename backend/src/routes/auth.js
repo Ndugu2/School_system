@@ -1,9 +1,18 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { ROLES, ADMIN_ROLES } = require('../config/roles');
 const router = express.Router();
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { message: 'Too many login attempts. Please try again later.' } },
+});
 
 // Generate Access Token
 const generateToken = (id) => {
@@ -32,6 +41,9 @@ router.post('/register', async (req, res) => {
     let userRole = role || ROLES.STUDENT;
 
     if (userCount === 0) {
+      if (process.env.ALLOW_INITIAL_ADMIN_SETUP !== 'true') {
+        return res.status(403).json({ error: { message: 'Initial administrator setup is disabled' } });
+      }
       // First user is super-admin
       userRole = ROLES.SUPER_ADMIN;
       console.log('No users found in database. Setting first registered user as super-admin.');
@@ -86,7 +98,7 @@ router.post('/register', async (req, res) => {
 // @route   POST /api/auth/login
 // @desc    Authenticate user & get token
 // @access  Public
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   try {

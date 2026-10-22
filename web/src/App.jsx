@@ -1,120 +1,131 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import LandingPage from './pages/LandingPage/LandingPage';
-import WelcomePage from './pages/About/WelcomePage';
-import AcademicsPage from './pages/Academics/AcademicsPage';
-import StudentLifePage from './pages/StudentLife/StudentLifePage';
-import AdmissionsPage from './pages/Admissions/AdmissionsPage';
-import PortalAccessPage from './pages/PortalAccess/PortalAccessPage';
-import AdminAuth from './pages/AdminPortal/AdminAuth';
-import AdminPortal from './pages/AdminPortal/AdminPortal';
-import LegacyApp from './legacy/LegacyApp';
+import Layout from './components/Layout';
+import Login from './pages/Login';
+import DashboardOverview from './pages/DashboardOverview';
+import TeacherDashboard from './pages/TeacherDashboard';
+import StudentDashboard from './pages/StudentDashboard';
+import Students from './pages/Students';
+import Teachers from './pages/Teachers';
+import Classes from './pages/Classes';
+import Attendance from './pages/Attendance';
+import Grades from './pages/Grades';
+import ParentGrades from './pages/ParentGrades';
+import Fees from './pages/Fees';
+import Finance from './pages/Finance';
+import Inventory from './pages/Inventory';
+import Operations from './pages/Operations';
+import ParentPortal from './pages/ParentPortal';
+import LMS from './pages/LMS';
+import NotificationsHub from './pages/NotificationsHub';
+import Messages from './pages/Messages';
+import Reports from './pages/Reports';
+import Settings from './pages/Settings';
+import RegistrationClearance from './pages/RegistrationClearance';
+import HR from './pages/HR';
+import Library from './pages/Library';
+import Hostel from './pages/Hostel';
+import LeadershipPortal from './pages/LeadershipPortal';
+import Analytics from './pages/Analytics';
+import { canAccessTab } from './config/permissions';
 
-function ProtectedAdminRoute() {
+function DashboardContent() {
   const { user, loading } = useAuth();
+  const defaultTab = 'dashboard';
+  const [currentTab, setCurrentTab] = useState(defaultTab);
+
+  useEffect(() => {
+    if (user && user.role === 'parent') {
+      setCurrentTab('parent_portal');
+    }
+  }, [user]);
 
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
         <div style={styles.spinner}></div>
-        <p style={styles.loadingText}>Loading Ndugu Academy Portal...</p>
+        <p style={styles.loadingText}>Connecting to Ndugu Academy Systems...</p>
       </div>
     );
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Login />;
   }
 
-  return <AdminPortal />;
-}
-
-function LegacyRouteWrapper() {
-  const navigate = useNavigate();
-  return <LegacyApp onSwitchToAdminPortal={() => navigate('/admin')} />;
-}
-
-function LandingPageWrapper() {
-  const { user } = useAuth();
-  return <LandingPage isAuthenticated={Boolean(user)} />;
-}
-
-function WelcomePageWrapper() {
-  const { user } = useAuth();
-  return <WelcomePage isAuthenticated={Boolean(user)} />;
-}
-
-function AcademicsPageWrapper() {
-  const { user } = useAuth();
-  return <AcademicsPage isAuthenticated={Boolean(user)} />;
-}
-
-function StudentLifePageWrapper() {
-  const { user } = useAuth();
-  return <StudentLifePage isAuthenticated={Boolean(user)} />;
-}
-
-function AdmissionsPageWrapper() {
-  const { user } = useAuth();
-  return <AdmissionsPage isAuthenticated={Boolean(user)} />;
-}
-
-function PortalAccessPageWrapper() {
-  const { user } = useAuth();
-  return <PortalAccessPage isAuthenticated={Boolean(user)} />;
-}
-
-function LoginRouteWrapper() {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.spinner}></div>
-        <p style={styles.loadingText}>Authenticating...</p>
-      </div>
-    );
+  if (!canAccessTab(user.role, currentTab)) {
+    return <Layout currentTab={currentTab} setCurrentTab={setCurrentTab}><div style={styles.denied}>You do not have permission to access this area.</div></Layout>;
   }
 
-  // If already authenticated, redirect to admin
-  if (user) {
-    return <Navigate to="/admin" replace />;
-  }
+  // Render correct page view inside layout based on selected tab
+  const renderTab = () => {
+    switch (currentTab) {
+      case 'dashboard':
+        if (user.role === 'headteacher') return <LeadershipPortal type="headteacher" setCurrentTab={setCurrentTab} />;
+        if (user.role === 'director-of-studies') return <LeadershipPortal type="director-of-studies" setCurrentTab={setCurrentTab} />;
+        if (user.role === 'hod') return <LeadershipPortal type="hod" setCurrentTab={setCurrentTab} />;
+        if (user.role === 'teacher') return <TeacherDashboard setCurrentTab={setCurrentTab} />;
+        if (user.role === 'student') return <StudentDashboard setCurrentTab={setCurrentTab} />;
+        if (user.role === 'parent') return <ParentPortal />;
+        if (user.role === 'bursar') return <Finance />;
+        return <DashboardOverview setCurrentTab={setCurrentTab} />;
+      case 'admissions':
+        return <RegistrationClearance />;
+      case 'students':
+        return <Students />;
+      case 'teachers':
+        return <Teachers />;
+      case 'hr':
+        return <HR />;
+      case 'classes':
+        return <Classes />;
+      case 'attendance':
+        return <Attendance />;
+      case 'grades':
+        return user.role === 'parent' ? <ParentGrades /> : user.role === 'student' ? <ParentGrades viewer="student" /> : <Grades />;
+      case 'fees':
+        return <Fees />;
+      case 'finance':
+        return <Finance />;
+      case 'hostel':
+        return <Hostel />;
+      case 'library':
+        return <Library />;
+      case 'inventory':
+        return <Inventory />;
+      case 'operations':
+        return <Operations />;
+      case 'parent_portal':
+        return <ParentPortal />;
+      case 'lms':
+        return <LMS />;
+      case 'reports':
+        return user.role === 'parent' ? <ParentGrades /> : user.role === 'student' ? <ParentGrades viewer="student" /> : <Reports />;
+      case 'analytics':
+        return <Analytics />;
+      case 'settings':
+        return <Settings />;
+      case 'notifications':
+        return <NotificationsHub />;
+      case 'messages':
+        return <Messages />;
+      default:
+        return <DashboardOverview />;
+    }
+  };
 
-  return <AdminAuth />;
+  return (
+    <Layout currentTab={currentTab} setCurrentTab={setCurrentTab}>
+      {renderTab()}
+    </Layout>
+  );
 }
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          {/* Public School Landing Website & Dedicated Navigation Pages */}
-          <Route path="/" element={<LandingPageWrapper />} />
-          <Route path="/welcome" element={<WelcomePageWrapper />} />
-          <Route path="/about" element={<Navigate to="/welcome" replace />} />
-          <Route path="/academics" element={<AcademicsPageWrapper />} />
-          <Route path="/student-life" element={<StudentLifePageWrapper />} />
-          <Route path="/houses" element={<Navigate to="/student-life" replace />} />
-          <Route path="/admissions" element={<AdmissionsPageWrapper />} />
-          <Route path="/portal-access" element={<PortalAccessPageWrapper />} />
-
-          {/* Portal Authentication Screen */}
-          <Route path="/login" element={<LoginRouteWrapper />} />
-
-          {/* Protected Central Admin Portal Routes */}
-          <Route path="/admin" element={<ProtectedAdminRoute />} />
-          <Route path="/admin/*" element={<ProtectedAdminRoute />} />
-
-          {/* Optional Legacy Multi-Tab Prototype Backup */}
-          <Route path="/legacy" element={<LegacyRouteWrapper />} />
-
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+    <AuthProvider>
+      <DashboardContent />
+    </AuthProvider>
   );
 }
 
@@ -125,22 +136,32 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#060b14',
+    background: '#0b0f19', // Sleek dark loader
     color: '#ffffff',
     gap: '20px',
   },
   spinner: {
-    width: '46px',
-    height: '46px',
-    border: '3px solid rgba(255, 255, 255, 0.1)',
-    borderTop: '3px solid #f59e0b',
+    width: '50px',
+    height: '50px',
+    border: '4px solid rgba(255, 255, 255, 0.1)',
+    borderTop: '4px solid #6366f1',
     borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
+    animation: 'spin 1s linear infinite',
   },
   loadingText: {
-    fontSize: '14px',
-    fontWeight: '600',
+    fontSize: '16px',
+    fontWeight: '500',
     letterSpacing: '0.5px',
-    color: '#94a3b8',
   },
+  denied: { padding: '32px', borderRadius: '12px', background: 'var(--danger-light)', color: 'var(--danger)', fontWeight: 600 }
 };
+
+// Add standard keyframe spin to header or stylesheet
+const styleSheet = document.createElement("style");
+styleSheet.innerText = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+document.head.appendChild(styleSheet);

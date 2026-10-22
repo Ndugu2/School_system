@@ -78,13 +78,15 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
         style={{
           ...styles.sidebar,
           left: sidebarOpen ? 0 : '-280px',
-          boxShadow: isMobile && sidebarOpen ? '0 20px 60px rgba(15, 23, 42, 0.18)' : 'none',
+          boxShadow: isMobile && sidebarOpen ? '0 20px 60px rgba(15, 23, 42, 0.12)' : 'none',
           width: isMobile ? 'min(280px, 85vw)' : 'var(--sidebar-width)',
         }}
       >
         <div style={styles.sidebarHeader}>
           <div style={styles.logoContainer}>
-            <GraduationCap size={28} color="#fbbf24" />
+            <div style={styles.logoIconWrap}>
+              <GraduationCap size={22} color="#f5c452" />
+            </div>
             <span style={styles.logoText}>Ndugu portal</span>
           </div>
           <button
@@ -110,11 +112,12 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
                 style={{
                   ...styles.navItem,
                   backgroundColor: isActive ? 'var(--primary-light)' : 'transparent',
-                  color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
-                  fontWeight: isActive ? '600' : '400'
+                  color: isActive ? 'var(--primary)' : '#1f2937',
+                  fontWeight: isActive ? '700' : '500',
+                  border: isActive ? '1px solid rgba(124, 58, 237, 0.35)' : '1px solid transparent'
                 }}
               >
-                <Icon size={20} style={{ color: isActive ? 'var(--primary)' : 'var(--text-tertiary)' }} />
+                <Icon size={18} style={{ color: isActive ? 'var(--primary)' : '#6b7280' }} />
                 <span>{item.label}</span>
               </button>
             );
@@ -123,7 +126,7 @@ export default function Layout({ children, currentTab, setCurrentTab }) {
 
         <div style={styles.sidebarFooter}>
           <button onClick={logout} style={styles.logoutBtn}>
-            <LogOut size={20} />
+            <LogOut size={18} />
             <span>Sign Out</span>
           </button>
         </div>
@@ -193,15 +196,15 @@ const styles = {
   appContainer: {
     display: 'flex',
     minHeight: '100vh',
-    backgroundColor: 'var(--bg-primary)',
+    backgroundColor: '#e8edf3',
   },
   sidebar: {
     position: 'fixed',
     top: 0,
     bottom: 0,
     width: 'var(--sidebar-width)',
-    backgroundColor: 'var(--bg-secondary)',
-    borderRight: '1px solid var(--border)',
+    backgroundColor: '#f5f7fa',
+    borderRight: '1px solid rgba(148, 163, 184, 0.25)',
     display: 'flex',
     flexDirection: 'column',
     zIndex: 100,
@@ -213,7 +216,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottom: '1px solid var(--border)',
+    borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
   },
   logoContainer: {
     display: 'flex',
@@ -224,7 +227,7 @@ const styles = {
     fontSize: '20px',
     fontWeight: '800',
     letterSpacing: '-0.5px',
-    color: 'var(--text-primary)',
+    color: '#1f2937',
   },
   closeSidebarBtn: {
     display: 'none', // Shown only on mobile screens
@@ -234,25 +237,26 @@ const styles = {
     cursor: 'pointer',
   },
   navigation: {
-    padding: '27px 18px',
+    padding: '22px 18px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '7px',
+    gap: '6px',
     flex: 1,
     overflowY: 'auto',
   },
   navItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: '15px',
-    padding: '12px 16px',
-    borderRadius: 'var(--radius-sm)',
-    border: 'none',
+    gap: '12px',
+    padding: '11px 14px',
+    borderRadius: '10px',
+    border: '1px solid transparent',
     cursor: 'pointer',
     textAlign: 'left',
     width: '100%',
     transition: 'var(--transition)',
-    fontSize: '15px',
+    fontSize: '16px',
+    backgroundColor: 'transparent',
     ':hover': {
       backgroundColor: 'var(--bg-tertiary)',
     }
@@ -264,19 +268,19 @@ const styles = {
   logoutBtn: {
     display: 'flex',
     alignItems: 'center',
-    gap: '15px',
-    padding: '12px 16px',
+    gap: '10px',
+    padding: '11px 16px',
     width: '100%',
     backgroundColor: 'transparent',
     border: 'none',
-    color: 'var(--danger)',
-    borderRadius: 'var(--radius-sm)',
+    color: '#dc2626',
+    borderRadius: '10px',
     cursor: 'pointer',
     fontSize: '15px',
     fontWeight: '500',
     transition: 'var(--transition)',
     ':hover': {
-      backgroundColor: 'var(--danger-light)',
+      backgroundColor: 'rgba(239, 68, 68, 0.06)',
     }
   },
   mainArea: {
@@ -285,15 +289,16 @@ const styles = {
     flexDirection: 'column',
     minHeight: '100vh',
     transition: 'var(--transition)',
+    backgroundColor: '#e8edf3',
   },
   header: {
     height: '84px',
-    backgroundColor: 'var(--bg-secondary)',
-    borderBottom: '1px solid var(--border)',
+    backgroundColor: '#1a2434',
+    borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '0 32px',
+    padding: '0 26px 0 18px',
     position: 'sticky',
     top: 0,
     zIndex: 90,
@@ -304,76 +309,82 @@ const styles = {
     gap: '18px',
   },
   menuToggleBtn: {
-    background: 'none',
-    border: 'none',
-    color: 'var(--text-primary)',
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(148, 163, 184, 0.2)',
+    color: '#edf4ff',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
   },
   pageTitle: {
-    fontSize: '21px',
+    fontSize: '20px',
     fontWeight: '700',
-    color: 'var(--text-primary)',
+    color: '#f8fafc',
   },
   headerRight: {
     display: 'flex',
     alignItems: 'center',
-    gap: '19px',
+    gap: '14px',
   },
   iconBtn: {
-    background: 'none',
-    border: 'none',
-    color: 'var(--text-secondary)',
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(148, 163, 184, 0.2)',
+    color: '#edf4ff',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     padding: '8px',
-    borderRadius: '50%',
+    borderRadius: '8px',
     transition: 'var(--transition)',
     ':hover': {
-      backgroundColor: 'var(--bg-tertiary)',
+      backgroundColor: 'rgba(255,255,255,0.08)',
     }
   },
   profileBadge: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    paddingLeft: '18px',
-    borderLeft: '1px solid var(--border)',
+    paddingLeft: '10px',
+    borderLeft: '1px solid rgba(148, 163, 184, 0.2)',
   },
   avatarPlaceholder: {
-    width: '40px',
-    height: '40px',
+    width: '36px',
+    height: '36px',
     borderRadius: '50%',
-    backgroundColor: 'var(--primary)',
+    backgroundColor: '#7c3aed',
     color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontWeight: '700',
-    fontSize: '16px',
+    fontSize: '15px',
   },
   profileText: {
     display: 'flex',
     flexDirection: 'column',
+    lineHeight: 1.2,
   },
   profileName: {
-    fontSize: '14px',
-    fontWeight: '600',
-    color: 'var(--text-primary)',
+    fontSize: '15px',
+    fontWeight: '700',
+    color: '#edf4ff',
   },
   profileRole: {
     fontSize: '11px',
-    color: 'var(--text-tertiary)',
+    color: '#c9d1df',
     fontWeight: '700',
     letterSpacing: '0.5px',
+    textTransform: 'uppercase',
   },
   contentBody: {
-    padding: '24px 32px 32px',
+    padding: '26px 28px 30px',
     flex: 1,
     overflowY: 'auto',
+    backgroundColor: '#e8edf3',
   }
 };
