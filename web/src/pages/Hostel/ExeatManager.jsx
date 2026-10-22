@@ -2,13 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { ShieldCheck, Clock, CheckCircle2, AlertTriangle, KeyRound, Plus, Search, Filter, LogOut, LogIn, X } from 'lucide-react';
 
-const MOCK_EXEATS = [
-  { _id: '1', studentName: 'Mukasa Ronald', admissionNo: 'NDU/2026/042', dormName: 'Lumumba Hall', roomNo: 'Room 12B', destination: 'Jinja (Family Funeral)', parentName: 'John Mukasa (0772112233)', departureTime: '2026-06-12 08:30', returnTime: '2026-06-14 17:00', otp: '8492', status: 'active_exit', wardenApproved: true },
-  { _id: '2', studentName: 'Kembabazi Joy', admissionNo: 'NDU/2026/073', dormName: 'Mary Stuart Hall', roomNo: 'Room 04', destination: 'Kampala Hospital (Dental Checkup)', parentName: 'Mary Kembabazi (0701998877)', departureTime: '2026-06-16 09:00', returnTime: '2026-06-16 16:00', otp: '4190', status: 'approved', wardenApproved: true },
-  { _id: '3', studentName: 'Ssemwogerere Paul', admissionNo: 'NDU/2026/119', dormName: 'Kabalega Hall', roomNo: 'Room 21A', destination: 'Entebbe (Medical Convalescence)', parentName: 'David Ssemwo (0782334455)', departureTime: '2026-06-17 10:00', returnTime: '2026-06-20 18:00', otp: 'Pending SMS', status: 'pending_parent', wardenApproved: false },
-  { _id: '4', studentName: 'Atuhaire Diana', admissionNo: 'NDU/2026/054', dormName: 'Complex Hall', roomNo: 'Room 08', destination: 'Wakiso (Sister Wedding)', departureTime: '2026-06-05 08:00', returnTime: '2026-06-07 16:00', parentName: 'Grace Atuhaire (0752119900)', otp: '6128', status: 'returned', wardenApproved: true, actualReturn: '2026-06-07 15:45' }
-];
-
 export default function ExeatManager() {
   const [exeats, setExeats] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,7 +11,10 @@ export default function ExeatManager() {
   const [form, setForm] = useState({ studentName: '', admissionNo: '', dormName: 'Lumumba Hall', roomNo: '', destination: '', parentName: '', departureTime: '', returnTime: '' });
 
   useEffect(() => {
-    api.get('/hostel/exeats').then(data => setExeats(data?.length ? data : MOCK_EXEATS)).catch(() => setExeats(MOCK_EXEATS)).finally(() => setLoading(false));
+    api.get('/hostel/exeats')
+      .then(data => setExeats(Array.isArray(data) ? data : []))
+      .catch(() => setExeats([]))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleAction = async (id, newStatus, extra = {}) => {
