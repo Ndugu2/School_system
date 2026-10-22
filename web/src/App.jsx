@@ -2,6 +2,10 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AdminAuth from './pages/AdminPortal/AdminAuth';
+import AdmissionsPage from './pages/Admissions/AdmissionsPage';
+import WelcomePage from './pages/About/WelcomePage';
+import AcademicsPage from './pages/Academics/AcademicsPage';
+import StudentLifePage from './pages/StudentLife/StudentLifePage';
 import AdminPortal from './pages/AdminPortal/AdminPortal';
 import LegacyApp from './legacy/LegacyApp';
 
@@ -27,6 +31,25 @@ function ProtectedAdminRoute() {
 function LegacyRouteWrapper() {
   const navigate = useNavigate();
   return <LegacyApp onSwitchToAdminPortal={() => navigate('/admin')} />;
+}
+
+function AdmissionsPageWrapper() {
+  return <AdmissionsPage />;
+}
+
+function WelcomePageWrapper() {
+  const { user } = useAuth();
+  return <WelcomePage isAuthenticated={Boolean(user)} />;
+}
+
+function AcademicsPageWrapper() {
+  const { user } = useAuth();
+  return <AcademicsPage isAuthenticated={Boolean(user)} />;
+}
+
+function StudentLifePageWrapper() {
+  const { user } = useAuth();
+  return <StudentLifePage isAuthenticated={Boolean(user)} />;
 }
 
 function LoginRouteWrapper() {
@@ -57,6 +80,14 @@ export default function App() {
           {/* Admin-first app: the public marketing site has been removed.
               "/" goes straight to the admin dashboard (login required). */}
           <Route path="/" element={<Navigate to="/admin" replace />} />
+
+          {/* Public school pages reachable from the admissions site */}
+          <Route path="/admissions" element={<AdmissionsPageWrapper />} />
+          <Route path="/welcome" element={<WelcomePageWrapper />} />
+          <Route path="/about" element={<Navigate to="/welcome" replace />} />
+          <Route path="/academics" element={<AcademicsPageWrapper />} />
+          <Route path="/student-life" element={<StudentLifePageWrapper />} />
+          <Route path="/houses" element={<Navigate to="/student-life" replace />} />
 
           {/* Portal Authentication Screen */}
           <Route path="/login" element={<LoginRouteWrapper />} />

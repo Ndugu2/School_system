@@ -108,7 +108,7 @@ export default function AdminAuth() {
                 type="email"
                 name="email"
                 required
-                placeholder="admin@ndugu.ac.ug"
+                placeholder="pius@ndugu.ac.ug"
                 value={formData.email}
                 onChange={handleChange}
                 style={{ width: '100%', paddingLeft: '44px', paddingRight: '16px', paddingTop: '14px', paddingBottom: '14px', fontSize: '15px', backgroundColor: '#080e1a', border: 'none', color: '#fff', borderRadius: '12px' }}

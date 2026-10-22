@@ -7,7 +7,7 @@ export default function SchoolHeader({ isAuthenticated, onOpenInquiry }) {
 
   return (
     <header className="ug-navbar">
-      <Link to="/" className="ug-brand">
+      <Link to="/welcome" className="ug-brand">
         <div className="ug-crest">
           <School size={22} color="#c59b27" />
         </div>
@@ -19,7 +19,7 @@ export default function SchoolHeader({ isAuthenticated, onOpenInquiry }) {
 
       <nav className="ug-nav-links">
         <NavLink 
-          to="/" 
+          to="/welcome" 
           end
           className={({ isActive }) => `ug-nav-link ${isActive ? 'active' : ''}`}
         >

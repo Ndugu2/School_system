@@ -142,6 +142,9 @@ app.use('/api/registrations',       require('./routes/registrations'));
 app.use('/api/requirements',        require('./routes/requirements'));
 app.use('/api/permits',              require('./routes/permits'));
 
+// ── Public Admissions: apply, upload documents, track status ─────────────────
+app.use('/api/student-applications', require('./routes/studentApplications'));
+
 // ── Report Cards (dual NCDC / UACE PDF generator) ─────────────────────────
 app.use('/api/report-cards',    require('./routes/reportCards'));
 

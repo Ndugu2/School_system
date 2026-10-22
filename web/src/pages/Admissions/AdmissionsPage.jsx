@@ -6,13 +6,16 @@ import {
   Clock, AlertCircle, X, Search, School, UserCheck, HeartHandshake,
   BookOpen, Award, Printer, UploadCloud, Eye
 } from 'lucide-react';
-import SchoolHeader from '../../components/SchoolNav/SchoolHeader';
-import SchoolFooter from '../../components/SchoolNav/SchoolFooter';
 import { API_URL } from '../../services/api';
 import '../LandingPage/LandingPage.css';
 
-export default function AdmissionsPage({ isAuthenticated }) {
+export default function AdmissionsPage() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    document.title = 'Admissions - Ndugu Academy';
+    return () => { document.title = 'Ndugu Academy - Admin Portal'; };
+  }, []);
 
   // Active view: 'apply' | 'track' | 'fees'
   const [activeSection, setActiveSection] = useState('apply');
@@ -291,8 +294,6 @@ export default function AdmissionsPage({ isAuthenticated }) {
 
   return (
     <div className="ug-school-root">
-      <SchoolHeader isAuthenticated={isAuthenticated} onOpenInquiry={() => setActiveSection('apply')} />
-
       {/* Hero Banner */}
       <section className="ug-hero" style={{ padding: '70px 48px 60px' }}>
         <div className="ug-hero-inner" style={{ gridTemplateColumns: '1fr', maxWidth: '1100px' }}>
@@ -1446,7 +1447,6 @@ export default function AdmissionsPage({ isAuthenticated }) {
         </div>
       )}
 
-      <SchoolFooter isAuthenticated={isAuthenticated} onOpenInquiry={() => setActiveSection('apply')} />
     </div>
   );
 }
