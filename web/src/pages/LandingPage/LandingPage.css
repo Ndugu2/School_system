@@ -1,0 +1,814 @@
+/* Sophisticated Solid Dark Blue & Muted Academic Gold — No Gradients, No Card Borders */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=Cinzel:wght@600;700;800&display=swap');
+
+:root {
+  /* Solid Dark Blue Surfaces (NO Gradients) */
+  --bg-deep: #080e1a;
+  --bg-surface: #0d1527;
+  --bg-card: #131f37;
+  --bg-card-hover: #182744;
+  --bg-input: #0b1222;
+  
+  /* Refined, Muted Academic Gold / Warm Yellow (NOT shouting) */
+  --accent-gold: #c59b27;
+  --accent-gold-hover: #b0881e;
+  --accent-gold-soft: #d8b257;
+  --accent-gold-dim: rgba(197, 155, 39, 0.12);
+  
+  --text-white: #f8fafc;
+  --text-dim: #94a3b8;
+  --text-muted: #64748b;
+}
+
+.ug-school-root {
+  min-height: 100vh;
+  background-color: var(--bg-deep);
+  color: var(--text-white);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 1. Top Notice Announcement Ticker — Solid flat surface */
+.ug-top-notice {
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 12px 48px;
+  font-size: 14px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.ug-notice-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.ug-notice-badge {
+  background-color: var(--accent-gold);
+  color: #080e1a;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.ug-notice-text {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+.ug-notice-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.ug-notice-link {
+  color: var(--accent-gold-soft);
+  cursor: pointer;
+  text-decoration: underline;
+  font-weight: 700;
+}
+
+/* 2. Main Navigation Bar — Solid flat surface */
+.ug-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: var(--bg-deep);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 18px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.ug-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.ug-crest {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background-color: var(--bg-card);
+  border: 1.5px solid var(--accent-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ug-brand-text h1 {
+  font-family: 'Cinzel', serif;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.ug-brand-sub {
+  font-size: 12.5px;
+  color: var(--accent-gold-soft);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin: 3px 0 0 0;
+}
+
+.ug-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.ug-nav-link {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 15.5px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  padding: 6px 0;
+}
+
+.ug-nav-link:hover,
+.ug-nav-link.active {
+  color: var(--accent-gold-soft);
+}
+
+.ug-nav-link.active {
+  color: var(--accent-gold);
+  border-bottom: 2px solid var(--accent-gold);
+}
+
+.ug-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.btn-ug-inquire {
+  background-color: transparent;
+  border: 1px solid var(--accent-gold);
+  color: var(--accent-gold-soft);
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-ug-inquire:hover {
+  background-color: var(--accent-gold);
+  color: #080e1a;
+}
+
+.btn-ug-portal {
+  background-color: var(--accent-gold);
+  border: none;
+  color: #080e1a;
+  padding: 11px 22px;
+  border-radius: 10px;
+  font-size: 14.5px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-ug-portal:hover {
+  background-color: var(--accent-gold-hover);
+  transform: translateY(-1px);
+}
+
+/* 3. Hero Showcase with Atmospheric Blurred High School Life Background */
+.ug-hero {
+  position: relative;
+  padding: 85px 48px 95px;
+  background-color: var(--bg-deep);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.ug-hero-bg-wrap {
+  position: absolute;
+  inset: -20px;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ug-hero-bg-slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(2px) brightness(0.92) saturate(1.18);
+  transform: scale(1.04);
+  opacity: 0;
+  transition: opacity 1.2s ease-in-out;
+}
+
+.ug-hero-bg-slide.active {
+  opacity: 1;
+}
+
+/* Solid Dark Blue Overlay (Zero Gradients) — Calibrated for brighter, vivid image visibility */
+.ug-hero-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(8, 14, 26, 0.38);
+  z-index: 2;
+}
+
+.ug-hero-indicators {
+  position: absolute;
+  bottom: 22px;
+  right: 48px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: rgba(13, 21, 39, 0.9);
+  padding: 7px 16px;
+  border-radius: 9999px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.ug-hero-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.35);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.25s ease;
+}
+
+.ug-hero-dot.active {
+  background-color: var(--accent-gold);
+  transform: scale(1.3);
+}
+
+.ug-hero-caption {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-weight: 600;
+  margin-left: 6px;
+  letter-spacing: 0.02em;
+}
+
+.ug-hero-inner {
+  position: relative;
+  z-index: 5;
+  max-width: 1360px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: 60px;
+  align-items: center;
+}
+
+.ug-hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  background-color: var(--accent-gold-dim);
+  border-radius: 9999px;
+  border: none;
+  color: var(--accent-gold-soft);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.ug-hero-title {
+  font-family: 'Cinzel', serif;
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #ffffff;
+  margin-bottom: 24px;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95), 0 4px 30px rgba(0, 0, 0, 0.8);
+}
+
+.ug-hero-title span {
+  color: var(--accent-gold-soft);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95);
+}
+
+.ug-hero-desc {
+  font-size: 18px;
+  line-height: 1.7;
+  color: #f1f5f9;
+  margin-bottom: 36px;
+  max-width: 660px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+}
+
+.ug-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 40px;
+}
+
+.btn-hero-ug-gold {
+  background-color: var(--accent-gold);
+  color: #080e1a;
+  font-weight: 800;
+  padding: 16px 32px;
+  border-radius: 12px;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  transition: all 0.2s ease;
+}
+
+.btn-hero-ug-gold:hover {
+  background-color: var(--accent-gold-hover);
+  transform: translateY(-1px);
+}
+
+.btn-hero-ug-outline {
+  background-color: var(--bg-card);
+  color: #ffffff;
+  border: none;
+  padding: 16px 28px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  transition: all 0.2s ease;
+}
+
+.btn-hero-ug-outline:hover {
+  background-color: var(--bg-card-hover);
+  color: var(--accent-gold-soft);
+}
+
+/* Quick Notice Card on Hero Right — NO BORDERS, Solid Navy */
+.ug-hero-card {
+  background-color: var(--bg-card);
+  border: none !important;
+  border-radius: 20px;
+  padding: 38px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.ug-card-badge {
+  position: absolute;
+  top: -14px;
+  right: 28px;
+  background-color: var(--accent-gold);
+  color: #080e1a;
+  font-size: 12.5px;
+  font-weight: 800;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  border: none;
+}
+
+.ug-hero-card h3 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ug-stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* NO BORDER on stat items */
+.ug-stat-item {
+  background-color: var(--bg-surface);
+  border: none !important;
+  padding: 20px 16px;
+  border-radius: 14px;
+  text-align: center;
+}
+
+.ug-stat-num {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--accent-gold-soft);
+  line-height: 1;
+}
+
+.ug-stat-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+/* Section Architecture */
+.ug-section {
+  padding: 95px 48px;
+  max-width: 1360px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.ug-section-head {
+  text-align: center;
+  margin-bottom: 56px;
+}
+
+.ug-sec-tag {
+  font-size: 13.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-gold-soft);
+  margin-bottom: 10px;
+  display: block;
+}
+
+.ug-sec-title {
+  font-family: 'Cinzel', serif;
+  font-size: 38px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 14px;
+}
+
+.ug-sec-sub {
+  font-size: 17px;
+  color: var(--text-dim);
+  max-width: 720px;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+/* Headteacher's Welcome Desk — NO BORDER, Solid Navy */
+.ug-welcome-box {
+  background-color: var(--bg-card);
+  border: none !important;
+  border-radius: 22px;
+  padding: 48px;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 48px;
+  align-items: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+.ug-principal-avatar {
+  width: 220px;
+  height: 240px;
+  border-radius: 16px;
+  background-color: var(--bg-surface);
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-dim);
+}
+
+.ug-quote {
+  font-size: 17.5px;
+  line-height: 1.75;
+  color: #cbd5e1;
+  font-style: italic;
+  margin-bottom: 24px;
+}
+
+.ug-principal-sig h4 {
+  font-size: 19px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+}
+
+.ug-principal-sig p {
+  font-size: 13.5px;
+  color: var(--accent-gold-soft);
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+/* Curriculum Grid — NO BORDERS */
+.ug-curriculum-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 28px;
+}
+
+.ug-curr-card {
+  background-color: var(--bg-card);
+  border: none !important;
+  border-radius: 20px;
+  padding: 36px;
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.ug-curr-card:hover {
+  background-color: var(--bg-card-hover);
+  transform: translateY(-3px);
+}
+
+.ug-curr-card h3 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 18px 0 14px;
+}
+
+.ug-curr-card p {
+  font-size: 15px;
+  color: var(--text-dim);
+  line-height: 1.65;
+  margin-bottom: 24px;
+}
+
+.ug-curr-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.ug-pill {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background-color: var(--bg-surface);
+  color: var(--accent-gold-soft);
+  border: none;
+}
+
+/* House System — NO BORDERS, Solid Navy */
+.ug-house-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+.ug-house-card {
+  background-color: var(--bg-card);
+  border: none !important;
+  border-radius: 18px;
+  padding: 30px 24px;
+  text-align: center;
+  transition: all 0.25s ease;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+}
+
+.ug-house-card:hover {
+  background-color: var(--bg-card-hover);
+  transform: translateY(-3px);
+}
+
+.ug-house-name {
+  font-family: 'Cinzel', serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 16px 0 6px;
+}
+
+.ug-house-motto {
+  font-size: 13px;
+  color: var(--accent-gold-soft);
+  font-style: italic;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+/* Admissions Desk Banner — NO BORDERS, Solid Navy */
+.ug-admissions-banner {
+  background-color: var(--bg-card);
+  border: none !important;
+  border-radius: 22px;
+  padding: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  flex-wrap: wrap;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Comprehensive Footer — Solid Deep Navy */
+.ug-footer {
+  background-color: #050912;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 80px 48px 36px;
+  margin-top: auto;
+}
+
+.ug-footer-inner {
+  max-width: 1360px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.8fr 1fr 1fr 1.6fr;
+  gap: 48px;
+  margin-bottom: 56px;
+}
+
+.ug-footer-col h4 {
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #ffffff;
+  margin-bottom: 22px;
+}
+
+.ug-footer-col ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ug-footer-col ul li a, .ug-footer-col ul li span {
+  font-size: 14.5px;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.2s ease;
+  cursor: pointer;
+}
+
+.ug-footer-col ul li a:hover, .ug-footer-col ul li span:hover {
+  color: var(--accent-gold-soft);
+}
+
+/* Staff & Admin Access in Footer — NO BORDERS */
+.ug-portal-box {
+  background-color: var(--bg-card);
+  border: none !important;
+  border-radius: 20px;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.ug-portal-box h4 {
+  font-size: 17.5px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ug-portal-box p {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.btn-footer-portal-login {
+  background-color: var(--accent-gold);
+  border: none;
+  color: #080e1a;
+  padding: 14px 24px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.btn-footer-portal-login:hover {
+  background-color: var(--accent-gold-hover);
+  transform: translateY(-1px);
+}
+
+.ug-footer-bottom {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding-top: 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+/* Modal for Online Admissions Inquiry — NO BORDERS */
+.ug-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(5, 9, 18, 0.85);
+  backdrop-filter: blur(10px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.ug-modal {
+  background-color: var(--bg-surface);
+  border: none !important;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 580px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+/* ── LARGE SCREEN / COMPUTER ENHANCEMENTS (>= 1400px) ────── */
+@media (min-width: 1400px) {
+  .ug-hero-title {
+    font-size: 60px;
+  }
+  .ug-hero-desc {
+    font-size: 19px;
+  }
+  .ug-sec-title {
+    font-size: 44px;
+  }
+  .ug-sec-sub {
+    font-size: 18px;
+  }
+  .ug-brand-text h1 {
+    font-size: 26px;
+  }
+  .ug-nav-link {
+    font-size: 16.5px;
+  }
+}
+
+@media (max-width: 900px) {
+  .ug-hero-inner { grid-template-columns: 1fr; }
+  .ug-welcome-box { grid-template-columns: 1fr; }
+  .ug-principal-avatar { width: 100%; height: 180px; }
+  .ug-house-grid { grid-template-columns: 1fr 1fr; }
+  .ug-footer-inner { grid-template-columns: 1fr; }
+  .ug-navbar { padding: 16px 24px; }
+  .ug-top-notice { padding: 10px 24px; }
+  .ug-hero { padding: 60px 24px; }
+  .ug-section { padding: 60px 24px; }
+  .ug-footer { padding: 60px 24px 24px; }
+}
