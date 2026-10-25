@@ -32,6 +32,10 @@ const DEFAULT_ACCOUNTS = [
   { code: '4070', name: 'Transport & Shuttle Bus Service', type: 'Income', subType: 'Service Revenue', isSystem: false, openingBalance: 0 },
   { code: '4080', name: 'Development & Building Fund Levy', type: 'Income', subType: 'Special Fund', isSystem: true, openingBalance: 0 },
   { code: '4090', name: 'Miscellaneous & Auxiliary Revenue', type: 'Income', subType: 'Other Revenue', isSystem: false, openingBalance: 0 },
+  { code: '4100', name: 'Functional & Co-Curricular Activities Fees', type: 'Income', subType: 'Fee Revenue', isSystem: false, openingBalance: 0 },
+  { code: '4110', name: 'Science Laboratory & Practical Fees', type: 'Income', subType: 'Academic Revenue', isSystem: false, openingBalance: 0 },
+  { code: '4120', name: 'ICT, Library & Learning Resources', type: 'Income', subType: 'Academic Revenue', isSystem: false, openingBalance: 0 },
+  { code: '4130', name: 'Medical, Dispensary & Student Welfare Fees', type: 'Income', subType: 'Welfare Revenue', isSystem: false, openingBalance: 0 },
 
   // ── EXPENSES (5000s) ──
   { code: '5010', name: 'Teaching Faculty & Administrative Salaries', type: 'Expense', subType: 'Payroll Expense', isSystem: true, openingBalance: 0 },

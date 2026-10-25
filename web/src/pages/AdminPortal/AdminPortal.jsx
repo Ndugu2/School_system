@@ -36,6 +36,7 @@ import {
   Bed
 } from 'lucide-react';
 import AdmissionsTab from './AdmissionsTab';
+import RegistrationTab from './RegistrationTab';
 import AcademicYearsTab from './AcademicYearsTab';
 import SubjectsTab from './SubjectsTab';
 import ClassesStreamsTab from './ClassesStreamsTab';
@@ -49,10 +50,13 @@ export default function AdminPortal({ onSwitchToLegacy }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const canManageRegistrations = ['super-admin', 'admin', 'headteacher', 'registrar', 'director-of-studies', 'deputy-head']
+    .includes(user?.role);
 
   // Deduce activeTab from URL path
   const getTabFromPath = (path) => {
     if (path.includes('/admin/admissions')) return 'admissions';
+    if (path.includes('/admin/registrations')) return 'registrations';
     if (path.includes('/admin/permits')) return 'permits';
     if (path.includes('/admin/finance')) return 'finance';
     if (path.includes('/admin/hostel') || path.includes('/admin/boarding')) return 'hostel';
@@ -107,11 +111,11 @@ export default function AdminPortal({ onSwitchToLegacy }) {
     setActiveTab(getTabFromPath(location.pathname));
   }, [location.pathname]);
 
-  const handleTabChange = (tab) => {
+  const handleTabChange = (tab, query = '') => {
     setActiveTab(tab);
     setMobileNavOpen(false);
     if (tab === 'overview') navigate('/admin');
-    else navigate(`/admin/${tab}`);
+    else navigate(`/admin/${tab}${query}`);
   };
 
   // Fetch all live data from backend
@@ -473,6 +477,21 @@ export default function AdminPortal({ onSwitchToLegacy }) {
                 {!sidebarCollapsed && <span className="ap-badge-accent">PER-xxxx</span>}
               </button>
 
+              {canManageRegistrations && (
+              <button
+                type="button"
+                className={`ap-sidebar-link ${activeTab === 'registrations' ? 'active' : ''}`}
+                onClick={() => handleTabChange('registrations')}
+                title="Term Registration (DOS) — fee-cleared students"
+              >
+                <div className="ap-link-lead">
+                  <GraduationCap size={18} className="ap-link-icon" />
+                  {!sidebarCollapsed && <span className="ap-link-label">Term Registration</span>}
+                </div>
+                {!sidebarCollapsed && <span className="ap-badge-gold">DOS</span>}
+              </button>
+              )}
+
               <button
                 type="button"
                 className={`ap-sidebar-link ${activeTab === 'students' ? 'active' : ''}`}
@@ -643,6 +662,7 @@ export default function AdminPortal({ onSwitchToLegacy }) {
                   {activeTab === 'finance' && 'Institutional Finances & Bursar'}
                   {activeTab === 'hostel' && 'Dormitories & Welfare'}
                   {activeTab === 'admissions' && 'Admissions & Clearance'}
+                  {activeTab === 'registrations' && 'Term Registration (DOS)'}
                   {activeTab === 'permits' && 'Class Entry Permits'}
                   {activeTab === 'academic-years' && 'Academic Years & Terms'}
                   {activeTab === 'subjects' && 'Curriculum Subjects'}
@@ -707,6 +727,7 @@ export default function AdminPortal({ onSwitchToLegacy }) {
                   {activeTab === 'finance' && 'Institutional Finance & Bursar Operations'}
                   {activeTab === 'hostel' && 'Hostel Accommodation & Dormitory Management'}
                   {activeTab === 'admissions' && 'Student Admissions & Clearance Board'}
+                  {activeTab === 'registrations' && 'DOS Term Registration & Stream Allocation'}
                   {activeTab === 'permits' && 'Class Entry Permits & Stream Allocations'}
                   {activeTab === 'academic-years' && 'Academic Years & School Terms'}
                   {activeTab === 'subjects' && 'Curriculum & Subjects Catalog'}
@@ -720,6 +741,7 @@ export default function AdminPortal({ onSwitchToLegacy }) {
                   {activeTab === 'finance' && 'Manage tuition fee structures, student ledger balances, official RcT receipts, and 40% threshold exam/dining gatekeeper passes.'}
                   {activeTab === 'hostel' && 'Oversee residential boarding dormitories, room and bed capacity allocations, student boarding approvals, and digital exeat passes.'}
                   {activeTab === 'admissions' && 'Review applications, verify records, approve admissions, and issue official LCK- admission numbers.'}
+                  {activeTab === 'registrations' && 'Fee-cleared students land here. Assign each one a class and stream, then activate them for the active term.'}
                   {activeTab === 'permits' && 'Generate official Licoka-style class permits (PER-xxxx), verify 40% fee clearance status, assign streams (Green/White/Blue), and print student permit passes.'}
                   {activeTab === 'academic-years' && 'Configure calendar sessions and toggle active Term I, Term II, or Term III.'}
                   {activeTab === 'subjects' && 'Manage O-Level (Compulsory/Optional) and A-Level (Principal/Subsidiary) subjects with UNEB codes.'}
@@ -997,6 +1019,14 @@ export default function AdminPortal({ onSwitchToLegacy }) {
             onApprove={handleApproveApplication}
             onReject={handleRejectApplication}
             actionLoading={actionLoading}
+          />
+        )}
+
+        {/* TAB: DOS TERM REGISTRATION & STREAM ALLOCATION */}
+        {canManageRegistrations && activeTab === 'registrations' && (
+          <RegistrationTab
+            user={user}
+            onGoToFinance={(financeTab) => handleTabChange('finance', financeTab ? `?financeTab=${financeTab}` : '')}
           />
         )}
 

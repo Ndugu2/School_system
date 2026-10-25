@@ -132,15 +132,23 @@ router.post('/structures', protect, authorize('admin', 'super-admin'), async (re
     const dev = parseFloat(developmentFee) || 0;
     const func = parseFloat(functionalFee) || 0;
     
+    const year = academicYear || new Date().getFullYear();
+    const existingStructure = await FeeStructure.findOne({ classLevel, term, academicYear: year });
+
     let otherSum = 0;
     const formattedOthers = (otherFees || []).map(f => {
       const amt = parseFloat(f.amount) || 0;
       otherSum += amt;
-      return { name: f.name, amount: amt };
+      const existingFee = (existingStructure?.otherFees || []).find(item => item.name === f.name);
+      return {
+        name: f.name,
+        amount: amt,
+        applicableTo: f.applicableTo || existingFee?.applicableTo || 'all',
+        accountCode: f.accountCode || existingFee?.accountCode || '4090'
+      };
     });
 
     const totalAmount = tuition + dev + func + otherSum;
-    const year = academicYear || new Date().getFullYear();
 
     const structure = await FeeStructure.findOneAndUpdate(
       { classLevel, term, academicYear: year },

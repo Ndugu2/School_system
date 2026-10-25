@@ -90,7 +90,81 @@ function mapLineItemToAccount(name) {
   if (n.includes('admission') || n.includes('register')) {
     return { code: '4040', name: 'Admission & Student Registration Fees', type: 'Income' };
   }
+  if (n.includes('functional') || n.includes('activity') || n.includes('club')) {
+    return { code: '4100', name: 'Functional & Co-Curricular Activities Fees', type: 'Income' };
+  }
+  if (n.includes('lab') || n.includes('practical') || n.includes('science')) {
+    return { code: '4110', name: 'Science Laboratory & Practical Fees', type: 'Income' };
+  }
+  if (n.includes('ict') || n.includes('computer') || n.includes('library') || n.includes('learning')) {
+    return { code: '4120', name: 'ICT, Library & Learning Resources', type: 'Income' };
+  }
+  if (n.includes('medical') || n.includes('sickbay') || n.includes('dispensary') || n.includes('welfare')) {
+    return { code: '4130', name: 'Medical, Dispensary & Student Welfare Fees', type: 'Income' };
+  }
   return { code: '4090', name: 'Miscellaneous & Auxiliary Revenue', type: 'Income' };
+}
+
+const DEFAULT_FEE_ACCOUNT_MAPPING = Object.freeze({
+  tuition: '4010',
+  development: '4080',
+  functional: '4100',
+  boarding: '4020',
+  transport: '4070',
+  exam: '4060',
+  registration: '4040'
+});
+
+function normalizeAccountMapping(input = {}) {
+  return Object.fromEntries(
+    Object.entries(DEFAULT_FEE_ACCOUNT_MAPPING).map(([key, fallback]) => [
+      key,
+      String(input?.[key] || fallback).trim()
+    ])
+  );
+}
+
+function normalizeOtherFees(otherFees = []) {
+  return (Array.isArray(otherFees) ? otherFees : [])
+    .map(fee => ({
+      name: String(fee?.name || '').trim(),
+      amount: Number(fee?.amount) || 0,
+      applicableTo: ['all', 'day', 'boarding'].includes(fee?.applicableTo) ? fee.applicableTo : 'all',
+      accountCode: String(fee?.accountCode || '4090').trim()
+    }))
+    .filter(fee => fee.name && fee.amount > 0);
+}
+
+function mappingForStructure(feeStructure) {
+  return normalizeAccountMapping(feeStructure?.accountMapping || {});
+}
+
+// Resolve every invoice line to a real Income account in the Chart of Accounts.
+// Explicit account codes (from a fee structure or the invoice form) win, with
+// the name-based mapper kept as a backwards-compatible fallback.
+async function buildRevenueJournalLines(lineItems = []) {
+  const prepared = (lineItems || []).map(item => {
+    const fallback = mapLineItemToAccount(item.name);
+    return { ...item, accountCode: String(item.accountCode || fallback.code).trim(), fallback };
+  });
+
+  const codes = [...new Set(prepared.map(item => item.accountCode).filter(Boolean))];
+  const accountDocs = codes.length
+    ? await Account.find({ code: { $in: codes }, type: 'Income' }).select('code name').lean()
+    : [];
+  const byCode = new Map(accountDocs.map(account => [account.code, account]));
+
+  return prepared.map(item => {
+    const account = byCode.get(item.accountCode);
+    const resolved = account || item.fallback;
+    return {
+      accountCode: resolved.code,
+      accountName: resolved.name,
+      accountType: 'Income',
+      debit: 0,
+      credit: Number(item.amount) || 0
+    };
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -392,7 +466,11 @@ router.post('/quotations/:id/convert-to-invoice', protect, authorize(...FINANCE_
       term: quote.term,
       academicYear: quote.academicYear,
       classLevel: quote.classLevel,
-      lineItems: quote.lineItems.map(item => ({ name: item.name, amount: item.total })),
+      lineItems: quote.lineItems.map(item => ({
+        name: item.name,
+        amount: item.total,
+        accountCode: mapLineItemToAccount(item.name).code
+      })),
       discounts: quote.discounts,
       subtotal: quote.subtotal,
       discountTotal: quote.discountTotal,
@@ -415,16 +493,10 @@ router.post('/quotations/:id/convert-to-invoice', protect, authorize(...FINANCE_
       }
     ];
 
-    quote.lineItems.forEach(item => {
-      const mapped = mapLineItemToAccount(item.name);
-      journalLines.push({
-        accountCode: mapped.code,
-        accountName: mapped.name,
-        accountType: 'Income',
-        debit: 0,
-        credit: item.total
-      });
-    });
+    const revenueJournalLines = await buildRevenueJournalLines(
+      quote.lineItems.map(item => ({ name: item.name, amount: item.total }))
+    );
+    journalLines.push(...revenueJournalLines);
 
     // Balance check
     const totalCredit = journalLines.slice(1).reduce((acc, l) => acc + l.credit, 0);
@@ -467,7 +539,11 @@ router.get('/invoices', protect, authorize(...FINANCE_VIEW_ROLES), async (req, r
   try {
     const { status, term, academicYear, classLevel, search, page = 1, limit = 100 } = req.query;
     const query = {};
-    if (status) query.status = status;
+    if (status) {
+      query.status = status.includes(',')
+        ? { $in: status.split(',').map(s => s.trim()).filter(Boolean) }
+        : status;
+    }
     if (term) query.term = term;
     if (academicYear) query.academicYear = parseInt(academicYear, 10);
     if (classLevel) query.classLevel = classLevel;
@@ -519,16 +595,26 @@ router.post('/invoices', protect, authorize(...FINANCE_EDIT_ROLES), async (req, 
     if (!studentDoc) studentDoc = await Student.findOne({ studentId });
     if (!studentDoc) return res.status(404).json({ error: { message: 'Student not found' } });
 
-    const formattedLineItems = lineItems.map(item => ({
-      name: item.name,
-      amount: Number(item.amount) || 0
-    })).filter(i => i.amount > 0);
+    const formattedLineItems = lineItems.map(item => {
+      const fallback = mapLineItemToAccount(item.name);
+      return {
+        name: item.name,
+        amount: Number(item.amount) || 0,
+        accountCode: String(item.accountCode || fallback.code).trim()
+      };
+    }).filter(i => i.amount > 0);
 
     if (formattedLineItems.length === 0) {
       return res.status(400).json({ error: { message: 'Invoice must contain at least one line item with an amount' } });
     }
 
-    const subtotal = formattedLineItems.reduce((acc, i) => acc + i.amount, 0);
+    const revenueJournalLines = await buildRevenueJournalLines(formattedLineItems);
+    const resolvedLineItems = formattedLineItems.map((item, index) => ({
+      ...item,
+      accountCode: revenueJournalLines[index].accountCode
+    }));
+
+    const subtotal = resolvedLineItems.reduce((acc, i) => acc + i.amount, 0);
 
     let discountTotal = 0;
     (discounts || []).forEach(d => {
@@ -546,7 +632,7 @@ router.post('/invoices', protect, authorize(...FINANCE_EDIT_ROLES), async (req, 
       term,
       academicYear: academicYear || new Date().getFullYear(),
       classLevel,
-      lineItems: formattedLineItems,
+      lineItems: resolvedLineItems,
       discounts,
       subtotal,
       discountTotal,
@@ -569,16 +655,7 @@ router.post('/invoices', protect, authorize(...FINANCE_EDIT_ROLES), async (req, 
       }
     ];
 
-    formattedLineItems.forEach(item => {
-      const mapped = mapLineItemToAccount(item.name);
-      journalLines.push({
-        accountCode: mapped.code,
-        accountName: mapped.name,
-        accountType: 'Income',
-        debit: 0,
-        credit: item.amount
-      });
-    });
+    journalLines.push(...revenueJournalLines);
 
     const totalCredit = journalLines.slice(1).reduce((acc, l) => acc + l.credit, 0);
     if (Math.abs(totalAmount - totalCredit) > 0.01) {
@@ -641,27 +718,52 @@ router.post('/invoices/generate-bulk', protect, authorize(...FINANCE_EDIT_ROLES)
         continue;
       }
 
+      const isBoarder = Boolean(student.boardingApproval);
+      const accountMapping = mappingForStructure(feeStructure);
       const lineItems = [];
+      const pushLine = (name, amount, accountCode) => {
+        const value = Number(amount) || 0;
+        if (value <= 0) return;
+        lineItems.push({
+          name,
+          amount: value,
+          accountCode: String(accountCode || mapLineItemToAccount(name).code).trim()
+        });
+      };
+
       if (feeStructure) {
-        if (feeStructure.tuitionFee > 0) lineItems.push({ name: 'Tuition Fee', amount: feeStructure.tuitionFee });
-        if (feeStructure.developmentFee > 0) lineItems.push({ name: 'Development Fee', amount: feeStructure.developmentFee });
-        if (feeStructure.functionalFee > 0) lineItems.push({ name: 'Functional Fee', amount: feeStructure.functionalFee });
-        if (student.boardingApproval && feeStructure.boardingFee > 0) {
-          lineItems.push({ name: 'Boarding & Accommodation', amount: feeStructure.boardingFee });
+        pushLine('Tuition Fee', feeStructure.tuitionFee, accountMapping.tuition);
+        pushLine('Development Fee', feeStructure.developmentFee, accountMapping.development);
+        pushLine('Functional Fee', feeStructure.functionalFee, accountMapping.functional);
+        pushLine('Examination & UNEB Fee', feeStructure.examFee, accountMapping.exam);
+        pushLine('Registration Fee', feeStructure.registrationFee, accountMapping.registration);
+        pushLine('Transport Fee', feeStructure.transportFee, accountMapping.transport);
+
+        if (isBoarder) {
+          pushLine('Boarding & Accommodation', feeStructure.boardingFee, accountMapping.boarding);
+          pushLine('Bedding & Mattress', feeStructure.bedding, accountMapping.boarding);
+          pushLine('Messing & Meals', feeStructure.messing, accountMapping.boarding);
         }
-        (feeStructure.otherFees || []).forEach(f => {
-          if (f.amount > 0) lineItems.push({ name: f.name, amount: f.amount });
+
+        (feeStructure.otherFees || []).forEach(fee => {
+          if (fee.applicableTo === 'day' && isBoarder) return;
+          if (fee.applicableTo === 'boarding' && !isBoarder) return;
+          pushLine(fee.name, fee.amount, fee.accountCode);
         });
       }
 
       // Add extra items (e.g. Tours, Excursions)
       (auxiliaryItems || []).forEach(item => {
-        if (Number(item.amount) > 0) {
-          lineItems.push({ name: item.name, amount: Number(item.amount) });
-        }
+        pushLine(item.name, item.amount, item.accountCode);
       });
 
-      const subtotal = lineItems.reduce((s, li) => s + li.amount, 0);
+      const revenueJournalLines = await buildRevenueJournalLines(lineItems);
+      const resolvedLineItems = lineItems.map((item, index) => ({
+        ...item,
+        accountCode: revenueJournalLines[index].accountCode
+      }));
+
+      const subtotal = resolvedLineItems.reduce((s, li) => s + li.amount, 0);
       let discountTotal = 0;
       (discounts || []).forEach(d => {
         if (d.percentage > 0) discountTotal += subtotal * (d.percentage / 100);
@@ -679,7 +781,7 @@ router.post('/invoices/generate-bulk', protect, authorize(...FINANCE_EDIT_ROLES)
           term,
           academicYear: year,
           classLevel,
-          lineItems,
+          lineItems: resolvedLineItems,
           discounts: discounts || [],
           subtotal,
           discountTotal,
@@ -695,10 +797,7 @@ router.post('/invoices/generate-bulk', protect, authorize(...FINANCE_EDIT_ROLES)
           { accountCode: '1200', accountName: 'Accounts Receivable (A/R - Student Fees)', accountType: 'Asset', debit: totalAmount, credit: 0 }
         ];
 
-        lineItems.forEach(item => {
-          const mapped = mapLineItemToAccount(item.name);
-          journalLines.push({ accountCode: mapped.code, accountName: mapped.name, accountType: 'Income', debit: 0, credit: item.amount });
-        });
+        journalLines.push(...revenueJournalLines);
 
         const totalCredit = journalLines.slice(1).reduce((acc, l) => acc + l.credit, 0);
         if (Math.abs(totalAmount - totalCredit) > 0.01) {
@@ -1012,7 +1111,11 @@ router.post('/fee-structures', protect, authorize(...FINANCE_EDIT_ROLES), async 
       functionalFee = 0,
       boardingFee = 0,
       transportFee = 0,
+      registrationFee = 0,
       examFee = 0,
+      bedding = 0,
+      messing = 0,
+      accountMapping = {},
       otherFees = [],
       notes
     } = req.body;
@@ -1022,17 +1125,42 @@ router.post('/fee-structures', protect, authorize(...FINANCE_EDIT_ROLES), async 
     }
 
     const year = parseInt(academicYear, 10) || new Date().getFullYear();
-    const otherFeesTotal = (otherFees || []).reduce((acc, f) => acc + (Number(f.amount) || 0), 0);
+    await ensureDefaultAccounts();
+
+    const normalizedMapping = normalizeAccountMapping(accountMapping);
+    const formattedOtherFees = normalizeOtherFees(otherFees);
+    const otherFeesTotal = formattedOtherFees.reduce((acc, fee) => acc + fee.amount, 0);
+
+    const usedAccountCodes = [...new Set([
+      ...Object.values(normalizedMapping),
+      ...formattedOtherFees.map(fee => fee.accountCode)
+    ])].filter(Boolean);
+
+    const incomeAccounts = usedAccountCodes.length
+      ? await Account.find({ code: { $in: usedAccountCodes }, type: 'Income' }).select('code').lean()
+      : [];
+    const knownCodes = new Set(incomeAccounts.map(account => account.code));
+    const invalidCodes = usedAccountCodes.filter(code => !knownCodes.has(code));
+    if (invalidCodes.length > 0) {
+      return res.status(400).json({
+        error: { message: `Unknown Income account code(s): ${invalidCodes.join(', ')}. Add them in the Chart of Accounts first.` }
+      });
+    }
 
     const totalDayStudent =
       Number(tuitionFee) +
       Number(developmentFee) +
       Number(functionalFee) +
       Number(transportFee) +
+      Number(registrationFee) +
       Number(examFee) +
       otherFeesTotal;
 
-    const totalBoardingStudent = totalDayStudent + Number(boardingFee);
+    const totalBoardingStudent =
+      totalDayStudent +
+      Number(boardingFee) +
+      Number(bedding) +
+      Number(messing);
 
     const updated = await FeeStructure.findOneAndUpdate(
       { classLevel, term, academicYear: year },
@@ -1045,8 +1173,12 @@ router.post('/fee-structures', protect, authorize(...FINANCE_EDIT_ROLES), async 
         functionalFee: Number(functionalFee),
         boardingFee: Number(boardingFee),
         transportFee: Number(transportFee),
+        registrationFee: Number(registrationFee),
         examFee: Number(examFee),
-        otherFees,
+        bedding: Number(bedding),
+        messing: Number(messing),
+        accountMapping: normalizedMapping,
+        otherFees: formattedOtherFees,
         totalDayStudent,
         totalBoardingStudent,
         totalAmount: totalDayStudent,

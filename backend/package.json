@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "seed:fees": "node scripts/seedFeeStructures.js"
   },
   "dependencies": {
     "axios": "^1.18.1",

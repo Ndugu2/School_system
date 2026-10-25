@@ -118,7 +118,7 @@ router.post('/', protect, authorize('admin', 'super-admin', 'registrar'), async 
 // @route   GET /api/students
 // @desc    Get all students (with optional filtering by class)
 // @access  Private
-router.get('/', protect, authorize('super-admin', 'admin', 'registrar', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent'), async (req, res) => {
+router.get('/', protect, authorize('super-admin', 'admin', 'registrar', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'student', 'parent', 'bursar'), async (req, res) => {
   const { classId } = req.query;
   const filter = {};
   let assignedClassIds = null;

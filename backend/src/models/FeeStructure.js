@@ -74,11 +74,25 @@ const feeStructureSchema = new mongoose.Schema({
     default: 0
   },
 
+  // ── Revenue Account Mapping ───────────────────────────────────────────────────
+  // Each fee component is posted to a specific Income account in the Chart of
+  // Accounts. These defaults match the standard 4000-series fee revenue codes.
+  accountMapping: {
+    tuition: { type: String, trim: true, default: '4010' },
+    development: { type: String, trim: true, default: '4080' },
+    functional: { type: String, trim: true, default: '4100' },
+    boarding: { type: String, trim: true, default: '4020' },
+    transport: { type: String, trim: true, default: '4070' },
+    exam: { type: String, trim: true, default: '4060' },
+    registration: { type: String, trim: true, default: '4040' }
+  },
+
   // ── Configurable Other Fees ───────────────────────────────────────────────────
   otherFees: [{
     name: { type: String, required: true },
     amount: { type: Number, required: true, min: 0 },
-    applicableTo: { type: String, enum: ['all', 'day', 'boarding'], default: 'all' }
+    applicableTo: { type: String, enum: ['all', 'day', 'boarding'], default: 'all' },
+    accountCode: { type: String, trim: true, default: '4090' }
   }],
 
   // ── Computed Totals ───────────────────────────────────────────────────────────

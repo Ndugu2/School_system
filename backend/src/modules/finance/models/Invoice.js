@@ -10,6 +10,8 @@ const discountSchema = new mongoose.Schema({
 const lineItemSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   amount: { type: Number, required: true, min: 0 },
+  // Income account this line posts to in the Chart of Accounts.
+  accountCode: { type: String, trim: true },
 }, { _id: false });
 
 const invoiceSchema = new mongoose.Schema({

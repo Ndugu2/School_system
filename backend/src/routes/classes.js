@@ -68,7 +68,7 @@ router.post('/', protect, authorize('admin', 'super-admin'), async (req, res) =>
 // @route   GET /api/classes
 // @desc    Get all classes
 // @access  Private
-router.get('/', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher'), async (req, res) => {
+router.get('/', protect, authorize('admin', 'super-admin', 'supervisor', 'deputy-head', 'academic-admin', 'class-teacher', 'teacher', 'registrar'), async (req, res) => {
   try {
     const query = {};
     if (['teacher', 'class-teacher'].includes(req.user.role)) {

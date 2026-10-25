@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useSearchParams } from 'react-router-dom';
 import FinanceDashboard from './FinanceDashboard';
 import AccountingCenter from './AccountingCenter';
 import InvoiceManager from './InvoiceManager';
@@ -38,7 +39,11 @@ const tabs = [
 export default function Finance() {
   const { user } = useAuth();
   const readOnly = user?.role === 'headteacher';
-  const [activeTab, setActiveTab] = useState('overview');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    const requested = searchParams.get('financeTab');
+    return tabs.some(tab => tab.id === requested) ? requested : 'overview';
+  });
 
   const renderTab = () => {
     switch (activeTab) {

@@ -8,6 +8,17 @@ const TERMS = ['Term 1','Term 2','Term 3'];
 const YEAR = new Date().getFullYear();
 const YEARS = [YEAR, YEAR - 1, YEAR - 2];
 
+const normalizeTerm = (value) => {
+  if (!value) return '';
+  const key = String(value).trim().toUpperCase().replace(/\s+/g, ' ');
+  const aliases = {
+    'TERM 1': 'Term 1', 'TERM I': 'Term 1', 'TERM ONE': 'Term 1', '1': 'Term 1',
+    'TERM 2': 'Term 2', 'TERM II': 'Term 2', 'TERM TWO': 'Term 2', '2': 'Term 2',
+    'TERM 3': 'Term 3', 'TERM III': 'Term 3', 'TERM THREE': 'Term 3', '3': 'Term 3'
+  };
+  return aliases[key] || '';
+};
+
 const statusConfig = {
   paid:    { color: '#10b981', bg: '#d1fae5', icon: CheckCircle,  label: 'Paid' },
   partial: { color: '#f59e0b', bg: '#fef3c7', icon: Clock,        label: 'Partial' },
@@ -47,11 +58,12 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
     academicYear: YEAR,
     dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
     lineItems: [
-      { name: 'Tuition Fee', amount: 850000 },
-      { name: 'School Tour / Educational Excursion', amount: 150000 }
+      { name: 'Tuition Fee', amount: 850000, accountCode: '4010' },
+      { name: 'School Tour / Educational Excursion', amount: 150000, accountCode: '4030' }
     ],
   });
   const [customLoading, setCustomLoading] = useState(false);
+  const [feeLoading, setFeeLoading] = useState(false);
 
   // Pay modal state
   const [payModal, setPayModal] = useState(null);
@@ -59,6 +71,7 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
   const [payMethod, setPayMethod] = useState('MTN Mobile Money');
   const [depositAccountId, setDepositAccountId] = useState('');
   const [depositAccounts, setDepositAccounts] = useState([]);
+  const [incomeAccounts, setIncomeAccounts] = useState([]);
   const [payRef, setPayRef] = useState('');
   const [payNotes, setPayNotes] = useState('');
   const [payReceipt, setPayReceipt] = useState(null);
@@ -80,18 +93,44 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
   const fetchStudents = async () => {
     try {
       const res = await api.get('/students?limit=200');
-      setStudents(res.students || []);
+      const list = Array.isArray(res) ? res : (res.students || []);
+      setStudents(list.filter(s => !['graduated', 'alumni', 'transferred', 'withdrawn'].includes(s.studentStatus)));
     } catch (err) { console.error(err); }
   };
 
   const fetchAccounts = async () => {
     try {
-      const res = await api.get('/finance/accounts?type=Asset');
-      const filtered = (res.accounts || []).filter(a => a.subType === 'Cash & Bank' || a.subType === 'Mobile Money' || a.subType === 'Current Asset');
+      const res = await api.get('/finance/accounts');
+      const allAccounts = Array.isArray(res) ? res : (res.accounts || []);
+      const revenue = allAccounts
+        .filter(account => account.type === 'Income')
+        .sort((a, b) => String(a.code).localeCompare(String(b.code)));
+      setIncomeAccounts(revenue);
+
+      const depositSubTypes = ['Bank Account', 'Cash and Cash Equivalents', 'Mobile Money', 'Cash & Bank'];
+      const filtered = allAccounts.filter(
+        account => account.type === 'Asset' && depositSubTypes.includes(account.subType)
+      );
       setDepositAccounts(filtered);
-      if (filtered.length > 0 && !depositAccountId) {
-        setDepositAccountId(filtered[0]._id);
+      if (filtered.length > 0) {
+        setDepositAccountId(prev => prev || filtered[0]._id);
       }
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchCurrentTerm = async () => {
+    try {
+      const res = await api.get('/academic-years');
+      const list = Array.isArray(res) ? res : (res.academicYears || []);
+      const active = list.find(y => y.isActive) || list[0];
+      if (!active) return;
+      const current = active.terms?.find(t => t.isCurrent)
+        || active.terms?.find(t => t.isActive)
+        || active.terms?.[0];
+      const term = normalizeTerm(current?.name);
+      if (!term) return;
+      setGenForm(prev => ({ ...prev, academicYear: active.year, term }));
+      setCustomForm(prev => ({ ...prev, academicYear: active.year, term }));
     } catch (err) { console.error(err); }
   };
 
@@ -99,6 +138,7 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
     fetchInvoices();
     fetchStudents();
     fetchAccounts();
+    fetchCurrentTerm();
   }, [filterStatus, filterTerm, filterYear]);
 
   const handleGenerate = async (e) => {
@@ -120,7 +160,8 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
     setCustomLoading(true);
     try {
       const res = await api.post('/finance/invoices', customForm);
-      alert(`✅ Invoice ${res.invoice?.invoiceNumber || ''} created & posted to General Ledger!`);
+      const invoiceNumber = res.invoiceNumber || res.invoice?.invoiceNumber || '';
+      alert(`✅ Invoice ${invoiceNumber} created & posted to General Ledger!`);
       setShowCustomModal(false);
       fetchInvoices();
     } catch (err) { alert(`❌ ${err.message}`); }
@@ -128,10 +169,86 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
   };
 
   const handleAddLineItem = () => {
+    const defaultAccount = incomeAccounts.find(account => account.code === '4090')?.code
+      || incomeAccounts[0]?.code
+      || '4090';
     setCustomForm(prev => ({
       ...prev,
-      lineItems: [...prev.lineItems, { name: '', amount: 0 }]
+      lineItems: [...prev.lineItems, { name: '', amount: 0, accountCode: defaultAccount }]
     }));
+  };
+
+  const accountName = (code) => incomeAccounts.find(account => account.code === code)?.name || '';
+
+  const loadClassFeeStructure = async () => {
+    setFeeLoading(true);
+    try {
+      const data = await api.get(
+        `/finance/fee-structures?academicYear=${customForm.academicYear}&term=${encodeURIComponent(customForm.term)}`
+      );
+      const list = Array.isArray(data) ? data : [];
+      const structure = list.find(item => item.classLevel === customForm.classLevel);
+      if (!structure) {
+        alert(`No fee structure found for ${customForm.classLevel}, ${customForm.term} ${customForm.academicYear}. Configure it under Tuition & Tours Matrix first.`);
+        return;
+      }
+
+      const selectedStudent = students.find(student => student._id === customForm.studentId);
+      const isBoarder = Boolean(selectedStudent?.boardingApproval);
+      const mapping = {
+        tuition: '4010',
+        development: '4080',
+        functional: '4100',
+        boarding: '4020',
+        transport: '4070',
+        exam: '4060',
+        registration: '4040',
+        ...(structure.accountMapping || {})
+      };
+
+      const lines = [];
+      const pushLine = (name, amount, accountCode) => {
+        const value = Number(amount) || 0;
+        if (value <= 0) return;
+        lines.push({ name, amount: value, accountCode: accountCode || '4090' });
+      };
+
+      pushLine('Tuition Fee', structure.tuitionFee, mapping.tuition);
+      pushLine('Development Fee', structure.developmentFee, mapping.development);
+      pushLine('Functional Fee', structure.functionalFee, mapping.functional);
+      pushLine('Examination & UNEB Fee', structure.examFee, mapping.exam);
+      pushLine('Registration Fee', structure.registrationFee, mapping.registration);
+      pushLine('Transport Fee', structure.transportFee, mapping.transport);
+
+      if (isBoarder) {
+        pushLine('Boarding & Accommodation', structure.boardingFee, mapping.boarding);
+        pushLine('Bedding & Mattress', structure.bedding, mapping.boarding);
+        pushLine('Messing & Meals', structure.messing, mapping.boarding);
+      }
+
+      (structure.otherFees || []).forEach(fee => {
+        if (fee.applicableTo === 'day' && isBoarder) return;
+        if (fee.applicableTo === 'boarding' && !isBoarder) return;
+        pushLine(fee.name, fee.amount, fee.accountCode);
+      });
+
+      if (lines.length === 0) {
+        alert('The selected fee structure has no payable line items.');
+        return;
+      }
+
+      setCustomForm(prev => ({
+        ...prev,
+        lineItems: lines,
+        classLevel: structure.classLevel,
+        term: structure.term,
+        academicYear: structure.academicYear
+      }));
+    } catch (err) {
+      alert(`❌ ${err.message}`);
+    } finally {
+      setFeeLoading(false);
+    }
   };
 
   const handleUpdateLine = (index, field, value) => {
@@ -323,7 +440,7 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
       {/* Single Custom Invoice Modal */}
       {showCustomModal && (
         <div style={s.overlay}>
-          <div style={{ ...s.modal, maxWidth: 620, maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ ...s.modal, maxWidth: 840, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={s.modalHeader}>
               <h3 style={s.modalTitle}>Create Custom Student Invoice</h3>
               <button style={s.closeBtn} onClick={() => setShowCustomModal(false)}><X size={18} /></button>
@@ -339,14 +456,15 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
                   setCustomForm({
                     ...customForm,
                     studentId: e.target.value,
-                    classLevel: st?.classLevel || customForm.classLevel
+                    classLevel: st?.currentClassLevel || st?.currentClass?.level || customForm.classLevel
                   });
                 }}
               >
                 <option value="">-- Choose Student --</option>
                 {students.map(st => (
                   <option key={st._id} value={st._id}>
-                    {st.user?.name || 'Unnamed'} ({st.admissionNumber || 'No ID'}) - {st.classLevel || 'Unassigned'}
+                    {st.user?.name || 'Unnamed'} ({st.admissionNumber || 'No ID'}) - {st.currentClassLevel || st.currentClass?.level || 'Unassigned'}
+                    {st.studentStatus === 'admitted' ? ' • Admitted' : ''}
                   </option>
                 ))}
               </select>
@@ -371,14 +489,30 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
               </div>
 
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <label style={s.label}>Invoice Line Items (Tuition, Tours, etc.)</label>
-                  <button type="button" onClick={handleAddLineItem} style={{ ...s.payBtn, backgroundColor: '#c59b2722', color: '#c59b27' }}>
-                    + Add Item
-                  </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
+                  <label style={s.label}>Invoice Line Items &amp; Revenue Accounts</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={loadClassFeeStructure}
+                      disabled={feeLoading}
+                      style={{ ...s.payBtn, backgroundColor: '#10b98122', color: '#10b981' }}
+                    >
+                      {feeLoading ? 'Loading…' : `Load ${customForm.classLevel} Fee Structure`}
+                    </button>
+                    <button type="button" onClick={handleAddLineItem} style={{ ...s.payBtn, backgroundColor: '#c59b2722', color: '#c59b27' }}>
+                      + Add Item
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 210px 32px', gap: 8, marginBottom: 6, padding: '0 2px' }}>
+                  <span style={s.columnHint}>Charge description</span>
+                  <span style={{ ...s.columnHint, textAlign: 'right' }}>Amount (UGX)</span>
+                  <span style={s.columnHint}>Income account</span>
+                  <span />
                 </div>
                 {customForm.lineItems.map((item, idx) => (
-                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 36px', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 210px 32px', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                     <input
                       placeholder="e.g. Tuition Fee, Tour to Queen Elizabeth, Uniform"
                       style={s.input}
@@ -394,11 +528,24 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
                       onChange={e => handleUpdateLine(idx, 'amount', e.target.value)}
                       required
                     />
-                    {customForm.lineItems.length > 1 && (
+                    <select
+                      style={s.input}
+                      value={item.accountCode || ''}
+                      onChange={e => handleUpdateLine(idx, 'accountCode', e.target.value)}
+                      title={accountName(item.accountCode)}
+                    >
+                      <option value="">Auto-map by name</option>
+                      {incomeAccounts.map(account => (
+                        <option key={account.code} value={account.code}>
+                          {account.code} — {account.name}
+                        </option>
+                      ))}
+                    </select>
+                    {customForm.lineItems.length > 1 ? (
                       <button type="button" onClick={() => handleRemoveLine(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
                         <Trash2 size={16} />
                       </button>
-                    )}
+                    ) : <span />}
                   </div>
                 ))}
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid var(--border)', fontWeight: 800 }}>
@@ -408,7 +555,8 @@ export default function InvoiceManager({ readOnly = false, onReceivePayment, onO
               </div>
 
               <p style={s.hint}>
-                ⚡ Double-Entry Posting: Debit 1200 Accounts Receivable & Credit matching Revenue Accounts (4010 Tuition, 4030 Tour/Excursions, 4020 Boarding).
+                ⚡ Double-Entry Posting: Debit 1200 Accounts Receivable and credit the selected Income account for each line.
+                Use “Load Fee Structure” to pull the class fees and their Chart of Accounts links automatically.
               </p>
 
               <button type="submit" style={s.primaryBtn} disabled={customLoading}>
@@ -549,6 +697,7 @@ const s = {
   closeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex' },
   form: { display: 'flex', flexDirection: 'column', gap: 14 },
   label: { fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' },
+  columnHint: { fontSize: 9.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' },
   input: { padding: '10px 14px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none', fontSize: 14, width: '100%' },
   hint: { fontSize: 12, color: 'var(--text-tertiary)', backgroundColor: 'var(--bg-tertiary)', padding: '10px 14px', borderRadius: 8, lineHeight: 1.6 },
   balanceRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--border)' },

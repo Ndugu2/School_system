@@ -1,13 +1,147 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const Registration = require('../models/Registration');
 const Student = require('../models/Student');
 const AcademicYear = require('../models/AcademicYear');
 const Class = require('../models/Class');
+const FeeAccount = require('../models/FeeAccount');
+const Invoice = require('../modules/finance/models/Invoice');
+const { REGISTRATION_FEE_THRESHOLD } = require('../config/registration');
 const { protect, authorize } = require('../middleware/auth');
 const { logAudit } = require('../middleware/auditLog');
 
 const ADMIN_ROLES = ['super-admin', 'admin', 'registrar'];
+
+// Terms are stored in the database as "Term I/II/III" but Registrations and
+// invoices use "Term 1/2/3". Normalise at every boundary.
+const normalizeTerm = (value) => {
+  if (!value) return null;
+  const key = String(value).trim().toUpperCase().replace(/\s+/g, ' ');
+  const aliases = {
+    'TERM 1': 'Term 1', 'TERM I': 'Term 1', 'TERM ONE': 'Term 1', '1': 'Term 1',
+    'TERM 2': 'Term 2', 'TERM II': 'Term 2', 'TERM TWO': 'Term 2', '2': 'Term 2',
+    'TERM 3': 'Term 3', 'TERM III': 'Term 3', 'TERM THREE': 'Term 3', '3': 'Term 3'
+  };
+  return aliases[key] || null;
+};
+
+const resolveAcademicYear = async (academicYearId) => {
+  if (academicYearId) {
+    if (mongoose.Types.ObjectId.isValid(academicYearId)) {
+      const byId = await AcademicYear.findById(academicYearId);
+      if (byId) return byId;
+    }
+    if (!Number.isNaN(Number(academicYearId))) {
+      const byYear = await AcademicYear.findOne({ year: Number(academicYearId) });
+      if (byYear) return byYear;
+    }
+    return null;
+  }
+
+  return (await AcademicYear.findOne({ isActive: true }))
+    || (await AcademicYear.findOne().sort({ year: -1 }));
+};
+
+const resolveTerm = (yearDoc, requestedTerm) => {
+  const normalized = normalizeTerm(requestedTerm);
+  if (normalized) return normalized;
+
+  const active = yearDoc?.terms?.find(t => t.isCurrent)
+    || yearDoc?.terms?.find(t => t.isActive)
+    || yearDoc?.terms?.[0];
+
+  return normalizeTerm(active?.name) || 'Term 1';
+};
+
+/**
+ * Returns the fee position for one or more students for a given year + term.
+ * The modern finance module (Invoice) is authoritative. If an older student
+ * only has a legacy FeeAccount, its posted ledger totals are used instead.
+ */
+const getFeePositions = async (studentIds, academicYear, term) => {
+  const ids = studentIds.map(id => String(id));
+  const positions = new Map();
+
+  ids.forEach(id => positions.set(id, {
+    billed: 0,
+    paid: 0,
+    balance: 0,
+    ratio: 0,
+    percent: 0,
+    invoiceCount: 0,
+    source: 'none',
+    eligible: false
+  }));
+
+  if (ids.length === 0) return positions;
+
+  const [invoices, accounts] = await Promise.all([
+    Invoice.find({ student: { $in: ids }, academicYear, term })
+      .select('student totalAmount paidAmount'),
+    FeeAccount.find({ student: { $in: ids }, academicYear, term })
+      .select('student totalFees totalPaid')
+  ]);
+
+  const invoiceTotals = new Map();
+  invoices.forEach(inv => {
+    const key = String(inv.student);
+    const current = invoiceTotals.get(key) || { billed: 0, paid: 0, count: 0 };
+    current.billed += Number(inv.totalAmount) || 0;
+    current.paid += Number(inv.paidAmount) || 0;
+    current.count += 1;
+    invoiceTotals.set(key, current);
+  });
+
+  const accountTotals = new Map();
+  accounts.forEach(acc => {
+    accountTotals.set(String(acc.student), {
+      billed: Number(acc.totalFees) || 0,
+      paid: Number(acc.totalPaid) || 0
+    });
+  });
+
+  ids.forEach(id => {
+    const invoice = invoiceTotals.get(id);
+    const account = accountTotals.get(id);
+
+    let billed = 0;
+    let paid = 0;
+    let invoiceCount = 0;
+    let source = 'none';
+
+    if (invoice && invoice.billed > 0) {
+      billed = invoice.billed;
+      paid = invoice.paid;
+      invoiceCount = invoice.count;
+      source = 'invoice';
+    } else if (account && account.billed > 0) {
+      billed = account.billed;
+      paid = account.paid;
+      source = 'fee-account';
+    }
+
+    const ratio = billed > 0 ? paid / billed : 0;
+
+    positions.set(id, {
+      billed,
+      paid,
+      balance: Math.max(0, billed - paid),
+      ratio,
+      percent: Math.round(ratio * 1000) / 10,
+      invoiceCount,
+      source,
+      eligible: billed > 0 && ratio >= REGISTRATION_FEE_THRESHOLD
+    });
+  });
+
+  return positions;
+};
+
+const getFeePosition = async (studentId, academicYear, term) => {
+  const positions = await getFeePositions([studentId], academicYear, term);
+  return positions.get(String(studentId));
+};
 
 // ── Registration Number Generator ─────────────────────────────────────────────
 const generateRegNumber = async (year, term) => {
@@ -54,6 +188,121 @@ router.get('/', protect, authorize(...ADMIN_ROLES, 'class-teacher', 'teacher'), 
   }
 });
 
+// @desc  Fee-cleared registration queue for the DOS / Registrar
+// @route GET /api/registrations/eligibility?academicYearId=&term=
+router.get(
+  '/eligibility',
+  protect,
+  authorize(...ADMIN_ROLES, 'director-of-studies', 'deputy-head', 'bursar'),
+  async (req, res) => {
+    try {
+      const academicYear = await resolveAcademicYear(req.query.academicYearId || req.query.academicYear);
+      if (!academicYear) {
+        return res.status(404).json({ error: { message: 'No academic year configured' } });
+      }
+
+      const term = resolveTerm(academicYear, req.query.term);
+
+      const students = await Student.find({
+        studentStatus: { $in: ['admitted', 'enrolled', 'active'] }
+      })
+        .select('studentId admissionNumber studentStatus currentClass currentClassLevel currentStream user')
+        .populate('user', 'name email')
+        .populate('currentClass', 'name level')
+        .sort({ createdAt: -1 });
+
+      const studentIds = students.map(s => s._id);
+
+      const [feePositions, registrations] = await Promise.all([
+        getFeePositions(studentIds, academicYear.year, term),
+        Registration.find({
+          student: { $in: studentIds },
+          academicYear: academicYear._id,
+          term,
+          status: { $ne: 'cancelled' }
+        })
+          .select('student registrationNumber status registrationStage class streamName')
+          .populate('class', 'name level')
+      ]);
+
+      const registrationByStudent = new Map();
+      registrations.forEach(reg => {
+        registrationByStudent.set(String(reg.student), {
+          _id: reg._id,
+          registrationNumber: reg.registrationNumber,
+          status: reg.status,
+          stage: reg.registrationStage,
+          className: reg.class?.name || null,
+          classLevel: reg.class?.level || null,
+          streamName: reg.streamName || null
+        });
+      });
+
+      const rows = students.map(student => {
+        const fee = feePositions.get(String(student._id));
+        const registration = registrationByStudent.get(String(student._id)) || null;
+
+        let status = 'awaiting_fees';
+        if (registration) status = 'registered';
+        else if (fee.eligible) status = 'eligible';
+        else if (fee.billed === 0) status = 'no_invoice';
+
+        return {
+          studentId: student._id,
+          name: student.user?.name || 'Unnamed Student',
+          studentNumber: student.studentId,
+          admissionNumber: student.admissionNumber,
+          studentStatus: student.studentStatus,
+          level: student.currentClassLevel || student.currentClass?.level || null,
+          currentClass: student.currentClass
+            ? { _id: student.currentClass._id, name: student.currentClass.name, level: student.currentClass.level }
+            : null,
+          currentStream: student.currentStream || null,
+          fee: {
+            billed: fee.billed,
+            paid: fee.paid,
+            balance: fee.balance,
+            percent: fee.percent,
+            source: fee.source,
+            invoiceCount: fee.invoiceCount,
+            eligible: fee.eligible
+          },
+          registration,
+          status
+        };
+      });
+
+      // Pending (eligible first), then registered, then fee-blocked.
+      const rank = { eligible: 0, awaiting_fees: 1, no_invoice: 2, registered: 3 };
+      rows.sort((a, b) => {
+        const diff = rank[a.status] - rank[b.status];
+        if (diff !== 0) return diff;
+        return String(a.name).localeCompare(String(b.name));
+      });
+
+      const pending = rows.filter(r => r.status !== 'registered');
+      const stats = {
+        total: rows.length,
+        eligible: pending.filter(r => r.status === 'eligible').length,
+        awaitingFees: pending.filter(r => r.status === 'awaiting_fees').length,
+        noInvoice: pending.filter(r => r.status === 'no_invoice').length,
+        registered: rows.filter(r => r.status === 'registered').length
+      };
+
+      res.json({
+        academicYear: { _id: academicYear._id, year: academicYear.year, label: academicYear.label },
+        term,
+        threshold: REGISTRATION_FEE_THRESHOLD,
+        thresholdPercent: Math.round(REGISTRATION_FEE_THRESHOLD * 100),
+        stats,
+        students: rows
+      });
+    } catch (err) {
+      res.status(500).json({ error: { message: err.message } });
+    }
+  }
+);
+
 // @desc  Get a student's full registration history
 // @route GET /api/registrations/student/:studentId
 router.get('/student/:studentId', protect, async (req, res) => {
@@ -90,7 +339,7 @@ router.get('/:id', protect, async (req, res) => {
 
 // @desc  Register a student for a given academic year + term + class + stream
 // @route POST /api/registrations
-router.post('/', protect, authorize(...ADMIN_ROLES), async (req, res) => {
+router.post('/', protect, authorize(...ADMIN_ROLES, 'director-of-studies', 'deputy-head'), async (req, res) => {
   const {
     studentId,
     academicYearId,
@@ -102,20 +351,51 @@ router.post('/', protect, authorize(...ADMIN_ROLES), async (req, res) => {
     subjectCombination,
     subjects,
     notes,
+    activate
   } = req.body;
 
   try {
+    // Validate academic year first (needed for the fee clearance check)
+    const academicYear = await AcademicYear.findById(academicYearId);
+    if (!academicYear) return res.status(404).json({ error: { message: 'Academic year not found' } });
+
+    const normalizedTerm = normalizeTerm(term);
+    if (!normalizedTerm) {
+      return res.status(400).json({ error: { message: 'Term must be Term 1, Term 2 or Term 3' } });
+    }
+
     // Check for duplicate registration
-    const existing = await Registration.findOne({ student: studentId, academicYear: academicYearId, term });
+    const existing = await Registration.findOne({
+      student: studentId,
+      academicYear: academicYearId,
+      term: normalizedTerm,
+      status: { $ne: 'cancelled' }
+    });
     if (existing) {
       return res.status(400).json({
-        error: { message: `Student is already registered for ${term} in this academic year` }
+        error: { message: `Student is already registered for ${normalizedTerm} in this academic year` }
       });
     }
 
-    // Validate academic year + class
-    const academicYear = await AcademicYear.findById(academicYearId);
-    if (!academicYear) return res.status(404).json({ error: { message: 'Academic year not found' } });
+    const student = await Student.findById(studentId);
+    if (!student) return res.status(404).json({ error: { message: 'Student not found' } });
+
+    // ── Fee clearance gate ────────────────────────────────────────────────────
+    // The student must have paid the configured share (default 50%) of the
+    // term's invoiced fees before the DOS can register them for the term.
+    const fee = await getFeePosition(studentId, academicYear.year, normalizedTerm);
+    if (!fee.eligible) {
+      const reason = fee.billed === 0
+        ? 'No fee invoice has been raised for this term yet. Ask the Bursar to raise the invoice and record a payment.'
+        : `Only ${fee.percent}% of the term fees have been paid. At least ${Math.round(REGISTRATION_FEE_THRESHOLD * 100)}% is required before registration.`;
+      return res.status(403).json({
+        error: {
+          message: `Registration blocked: ${reason}`,
+          code: 'FEE_CLEARANCE_REQUIRED',
+          feeStatus: fee
+        }
+      });
+    }
 
     const cls = await Class.findById(classId);
     if (!cls) return res.status(404).json({ error: { message: 'Class not found' } });
@@ -128,12 +408,13 @@ router.post('/', protect, authorize(...ADMIN_ROLES), async (req, res) => {
       resolvedStreamName = stream.name;
     }
 
-    const registrationNumber = await generateRegNumber(academicYear.year, term);
+    const isActivation = activate === true;
+    const registrationNumber = await generateRegNumber(academicYear.year, normalizedTerm);
 
     const registration = await Registration.create({
       student: studentId,
       academicYear: academicYearId,
-      term,
+      term: normalizedTerm,
       class: classId,
       streamId: streamId || null,
       streamName: resolvedStreamName,
@@ -141,15 +422,20 @@ router.post('/', protect, authorize(...ADMIN_ROLES), async (req, res) => {
       boardingStatus: boardingStatus || 'day',
       subjectCombination,
       subjects: subjects || [],
-      status: 'enrolled',
+      status: isActivation ? 'registered' : 'enrolled',
+      registrationStage: isActivation ? 'approved' : 'enrolled',
+      feeClearanceStatus: fee.ratio >= 1 ? 'cleared' : 'partial',
+      approvedBy: isActivation ? req.user._id : undefined,
+      approvedAt: isActivation ? new Date() : undefined,
       registrationNumber,
       notes,
       registeredBy: req.user._id,
     });
 
-    // Update student's current class snapshot
+    // Update student's current class snapshot. A DOS registration activates the
+    // student immediately; a draft enrolment stays in the 'enrolled' state.
     await Student.findByIdAndUpdate(studentId, {
-      studentStatus: 'active',
+      studentStatus: isActivation ? 'active' : 'enrolled',
       currentClass: classId,
       currentClassLevel: cls.level,
       currentStream: resolvedStreamName
@@ -160,7 +446,7 @@ router.post('/', protect, authorize(...ADMIN_ROLES), async (req, res) => {
       module: 'registrations',
       recordId: registration._id,
       recordRef: registration.registrationNumber,
-      description: `Student registered for ${academicYear.year} ${term} — ${cls.level} ${resolvedStreamName || ''}`,
+      description: `Student registered for ${academicYear.year} ${normalizedTerm} — ${cls.level} ${resolvedStreamName || ''} (${fee.percent}% fees paid)`,
     });
 
     const populated = await Registration.findById(registration._id)
